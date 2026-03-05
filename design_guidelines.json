@@ -1,0 +1,149 @@
+{
+  "design_system": {
+    "name": "Cybervoid OS",
+    "theme_strategy": "AMOLED_CYBERPUNK",
+    "description": "A high-contrast, deep-black interface with neon functional accents. Prioritizes battery life (AMOLED), visual hierarchy via luminance, and a 'hacker-chic' aesthetic.",
+    "typography": {
+      "font_family": {
+        "headings": "Unbounded, 'Orbitron', sans-serif",
+        "body": "'JetBrains Mono', 'Rajdhani', monospace",
+        "ui": "'Rajdhani', sans-serif"
+      },
+      "scale": {
+        "h1": "text-5xl md:text-7xl font-black tracking-tighter uppercase",
+        "h2": "text-3xl md:text-5xl font-bold tracking-tight",
+        "h3": "text-2xl font-bold tracking-wide uppercase",
+        "body_lg": "text-lg leading-relaxed",
+        "body_base": "text-base leading-relaxed opacity-90",
+        "caption": "text-xs tracking-widest uppercase opacity-60"
+      },
+      "imports": [
+        "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Unbounded:wght@300;500;900&display=swap"
+      ]
+    },
+    "colors": {
+      "background": {
+        "default": "#000000",
+        "paper": "#050505",
+        "subtle": "#0A0A0A",
+        "overlay": "rgba(0, 0, 0, 0.85)"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A1A1AA",
+        "muted": "#52525B",
+        "inverse": "#000000"
+      },
+      "accents": {
+        "neon_red": "#FF2A6D",
+        "neon_pink": "#FF00FF",
+        "electric_blue": "#05D9E8",
+        "acid_green": "#39FF14",
+        "cyber_yellow": "#FAFF00",
+        "void_purple": "#BD00FF"
+      },
+      "border": {
+        "default": "#27272A",
+        "active": "#FFFFFF",
+        "glass": "rgba(255, 255, 255, 0.1)"
+      }
+    },
+    "spacing": {
+      "container_padding": "p-6 md:p-12",
+      "element_gap": "gap-4 md:gap-8",
+      "grid_gap": "gap-6"
+    },
+    "layout": {
+      "grid_system": "Bento Grid (Asymmetrical)",
+      "sidebar_width": "w-64",
+      "border_radius": {
+        "default": "rounded-none",
+        "card": "rounded-sm",
+        "button": "rounded-sm",
+        "input": "rounded-none"
+      }
+    },
+    "effects": {
+      "glassmorphism": {
+        "class": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]",
+        "usage": "Modals, Floating Nav, Cards"
+      },
+      "neon_glow": {
+        "class": "shadow-[0_0_15px_rgba(var(--accent-color),0.5)]",
+        "usage": "Active states, Primary Buttons"
+      },
+      "scanlines": {
+        "css": "background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none;"
+      }
+    },
+    "assets": {
+      "images": {
+        "wallpapers": [
+          {
+            "url": "https://images.unsplash.com/photo-1764986313458-dd8964cf3942?crop=entropy&cs=srgb&fm=jpg&q=85",
+            "category": "Cyberpunk Alley",
+            "description": "Neon signs illuminate a dark, urban alleyway at night."
+          },
+          {
+            "url": "https://images.unsplash.com/photo-1674453736349-029f0ffc863a?crop=entropy&cs=srgb&fm=jpg&q=85",
+            "category": "Dark Hallway",
+            "description": "Dark hallway with neon lights on the ceiling."
+          },
+          {
+            "url": "https://images.unsplash.com/photo-1712002991787-06cb1dcda1c6?crop=entropy&cs=srgb&fm=jpg&q=85",
+            "category": "Abstract Neon",
+            "description": "Black background with colorful lines of light."
+          }
+        ],
+        "placeholders": {
+          "user_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=cyber",
+          "file_icon": "https://api.iconify.design/ph:file-fill.svg?color=%23ffffff"
+        }
+      },
+      "icons": {
+        "library": "lucide-react",
+        "style": "Stroke width 1.5px, sharp edges preferred"
+      }
+    },
+    "components": {
+      "Button": {
+        "styles": "rounded-none uppercase tracking-widest font-bold transition-all duration-200 active:scale-95",
+        "variants": {
+          "primary": "bg-white text-black hover:bg-accent hover:text-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]",
+          "secondary": "border border-white/20 text-white hover:border-white hover:bg-white/5",
+          "ghost": "text-white/60 hover:text-white hover:bg-white/5",
+          "destructive": "border border-red-500 text-red-500 hover:bg-red-500/10"
+        }
+      },
+      "Card": {
+        "styles": "bg-[#0A0A0A] border border-white/5 p-6 hover:border-white/20 transition-colors"
+      },
+      "Input": {
+        "styles": "bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-accent placeholder:text-white/30 rounded-none transition-colors"
+      }
+    },
+    "universal_guidelines": [
+      "DO NOT use gradients for backgrounds. Use solid #000000 or subtle noise textures.",
+      "Use 'Unbounded' font for all headings (h1-h3). Use 'JetBrains Mono' for data/code.",
+      "All interactive elements must have a :hover state that increases brightness or adds a glow.",
+      "Sidebar must be fixed on the left, full height, with a distinct border-r border-white/10.",
+      "Theme customization (accent color) should use CSS variables (e.g., --accent-color).",
+      "Real-time chat messages should animate in from the bottom.",
+      "User profiles should display a 'Holo-Card' effect (glassmorphism + border glow).",
+      "File grid must support 'Bento' layout - mixing square and wide tiles.",
+      "Use 'sonner' for toast notifications with a dark, high-contrast theme.",
+      "Ensure text contrast is at least 4.5:1 against black backgrounds.",
+      "For image previews, use a full-screen modal with a backdrop blur.",
+      "Avoid rounded corners > 4px. Prefer sharp or slightly rounded (2px).",
+      "All interactive/key elements MUST include data-testid attributes."
+    ]
+  },
+  "instructions_to_main_agent": {
+    "step_1": "Setup Tailwind with the custom font families (Unbounded, JetBrains Mono).",
+    "step_2": "Create a ThemeContext to handle the dynamic accent color and wallpaper changes.",
+    "step_3": "Build the Sidebar component with Lucide icons.",
+    "step_4": "Develop the File Grid with drag-and-drop upload zone (dashed border, neon glow on drag).",
+    "step_5": "Implement the Chat interface with WebSocket integration.",
+    "step_6": "Create the Settings page for theme switching (colors: Red, Pink, Blue, Green, etc.)."
+  }
+}
