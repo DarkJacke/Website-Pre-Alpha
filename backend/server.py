@@ -1,15 +1,18 @@
 import os
+import re
 import uuid
-import asyncio
+import time
+import hashlib
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional
 from contextlib import asynccontextmanager
+from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from jose import jwt, JWTError
@@ -22,11 +25,85 @@ MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/app/backend/uploads")
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 security = HTTPBearer(auto_error=False)
+
+# ---- RATE LIMITER ----
+class RateLimiter:
+    def __init__(self):
+        self.attempts = defaultdict(list)
+
+    def check(self, key: str, max_attempts: int, window_seconds: int):
+        now = time.time()
+        self.attempts[key] = [t for t in self.attempts[key] if now - t < window_seconds]
+        if len(self.attempts[key]) >= max_attempts:
+            return False
+        self.attempts[key].append(now)
+        return True
+
+    def record_failure(self, key: str):
+        self.attempts[key].append(time.time())
+
+rate_limiter = RateLimiter()
+
+# ---- VALIDATORS ----
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_]{3,24}$')
+DANGEROUS_FILENAME_CHARS = re.compile(r'[^\w\s\-\.\(\)]', re.UNICODE)
+
+def validate_email(email: str) -> str:
+    email = email.strip().lower()
+    if not EMAIL_REGEX.match(email):
+        raise ValueError("Invalid email format")
+    if len(email) > 254:
+        raise ValueError("Email too long")
+    return email
+
+def validate_username(username: str) -> str:
+    username = username.strip()
+    if not USERNAME_REGEX.match(username):
+        raise ValueError("Username must be 3-24 chars, only letters, numbers, underscores")
+    return username
+
+def validate_password(password: str) -> str:
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(password) > 128:
+        raise ValueError("Password too long")
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not (has_upper and has_lower and has_digit):
+        raise ValueError("Password needs uppercase, lowercase, and a number")
+    return password
+
+def sanitize_search(query: str) -> str:
+    return re.escape(query.strip()[:100])
+
+def sanitize_filename(name: str) -> str:
+    name = DANGEROUS_FILENAME_CHARS.sub('_', name)
+    return name[:200].strip() or "unnamed"
+
+def password_strength(password: str) -> dict:
+    score = 0
+    if len(password) >= 8:
+        score += 1
+    if len(password) >= 12:
+        score += 1
+    if re.search(r'[A-Z]', password):
+        score += 1
+    if re.search(r'[a-z]', password):
+        score += 1
+    if re.search(r'\d', password):
+        score += 1
+    if re.search(r'[^A-Za-z0-9]', password):
+        score += 1
+    levels = ['weak', 'weak', 'fair', 'fair', 'good', 'strong', 'very_strong']
+    return {"score": score, "level": levels[min(score, 6)]}
 
 # Connection Manager for WebSocket Chat
 class ConnectionManager:
@@ -50,7 +127,7 @@ class ConnectionManager:
             for connection in self.active_connections[chat_id]:
                 try:
                     await connection.send_json(message)
-                except:
+                except Exception:
                     pass
 
 manager = ConnectionManager()
@@ -59,14 +136,16 @@ manager = ConnectionManager()
 async def lifespan(app: FastAPI):
     app.state.mongo_client = AsyncIOMotorClient(MONGO_URL)
     app.state.db = app.state.mongo_client[DB_NAME]
-    # Create indexes
     db = app.state.db
     await db.users.create_index("email", unique=True)
     await db.users.create_index("username", unique=True)
+    await db.users.create_index("user_id", unique=True)
     await db.files.create_index("user_id")
-    await db.files.create_index("filename")
+    await db.files.create_index("file_id", unique=True)
+    await db.files.create_index([("filename", "text")])
     await db.messages.create_index("chat_id")
     await db.chats.create_index("participants")
+    await db.chats.create_index("chat_id", unique=True)
     yield
     app.state.mongo_client.close()
 
@@ -83,11 +162,26 @@ app.add_middleware(
 def get_db():
     return app.state.db
 
-# Models
+# ---- MODELS ----
 class RegisterModel(BaseModel):
     username: str
     email: str
     password: str
+    
+    @field_validator('username')
+    @classmethod
+    def check_username(cls, v):
+        return validate_username(v)
+    
+    @field_validator('email')
+    @classmethod
+    def check_email(cls, v):
+        return validate_email(v)
+    
+    @field_validator('password')
+    @classmethod
+    def check_password(cls, v):
+        return validate_password(v)
 
 class LoginModel(BaseModel):
     email: str
@@ -97,6 +191,29 @@ class UpdateProfileModel(BaseModel):
     display_name: Optional[str] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
+    
+    @field_validator('display_name')
+    @classmethod
+    def check_name(cls, v):
+        if v and len(v.strip()) > 50:
+            raise ValueError("Display name too long")
+        return v.strip() if v else v
+    
+    @field_validator('bio')
+    @classmethod
+    def check_bio(cls, v):
+        if v and len(v) > 500:
+            raise ValueError("Bio too long (max 500)")
+        return v
+
+class ChangePasswordModel(BaseModel):
+    current_password: str
+    new_password: str
+    
+    @field_validator('new_password')
+    @classmethod
+    def check_new(cls, v):
+        return validate_password(v)
 
 class ThemeSettingsModel(BaseModel):
     accent_color: Optional[str] = None
@@ -108,12 +225,22 @@ class CreateChatModel(BaseModel):
 
 class SendMessageModel(BaseModel):
     content: str
+    
+    @field_validator('content')
+    @classmethod
+    def check_content(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Message cannot be empty")
+        if len(v) > 5000:
+            raise ValueError("Message too long")
+        return v.strip()
 
-# Auth Helpers
+# ---- AUTH HELPERS ----
 def create_token(user_id: str, username: str):
     payload = {
         "sub": user_id,
         "username": username,
+        "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(days=30)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -125,7 +252,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
         return {"user_id": payload["sub"], "username": payload["username"]}
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
@@ -136,18 +263,21 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(
     except JWTError:
         return None
 
-def serialize_doc(doc):
-    if doc and "_id" in doc:
-        doc["_id"] = str(doc["_id"])
-    return doc
-
 # ---- AUTH ROUTES ----
 @app.post("/api/auth/register")
-async def register(data: RegisterModel):
+async def register(data: RegisterModel, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    if not rate_limiter.check(f"register:{ip}", max_attempts=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again in 5 minutes.")
+    
     db = get_db()
-    existing = await db.users.find_one({"$or": [{"email": data.email}, {"username": data.username}]})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email or username already exists")
+    existing_email = await db.users.find_one({"email": data.email})
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    existing_user = await db.users.find_one({"username": data.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
     
     user_id = str(uuid.uuid4())
     user = {
@@ -160,6 +290,7 @@ async def register(data: RegisterModel):
         "avatar_url": f"https://api.dicebear.com/7.x/bottts/svg?seed={data.username}",
         "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_login": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(user)
     token = create_token(user_id, data.username)
@@ -177,11 +308,23 @@ async def register(data: RegisterModel):
     }
 
 @app.post("/api/auth/login")
-async def login(data: LoginModel):
+async def login(data: LoginModel, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    email = data.email.strip().lower()
+    
+    if not rate_limiter.check(f"login:{ip}", max_attempts=10, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 5 minutes.")
+    
+    if not rate_limiter.check(f"login:{email}", max_attempts=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Account temporarily locked. Try again in 5 minutes.")
+    
     db = get_db()
-    user = await db.users.find_one({"email": data.email})
+    user = await db.users.find_one({"email": email})
     if not user or not pwd_context.verify(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        rate_limiter.record_failure(f"login:{email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}})
     
     token = create_token(user["user_id"], user["username"])
     return {
@@ -204,6 +347,23 @@ async def get_me(current_user=Depends(get_current_user)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@app.post("/api/auth/password-check")
+async def check_password_strength(data: dict):
+    pwd = data.get("password", "")
+    return password_strength(pwd)
+
+@app.put("/api/auth/change-password")
+async def change_password(data: ChangePasswordModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not pwd_context.verify(data.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    new_hash = pwd_context.hash(data.new_password)
+    await db.users.update_one({"user_id": current_user["user_id"]}, {"$set": {"password_hash": new_hash}})
+    return {"status": "password_changed"}
 
 # ---- USER ROUTES ----
 @app.get("/api/users/{user_id}")
@@ -253,17 +413,21 @@ async def upload_file(
 ):
     db = get_db()
     file_id = str(uuid.uuid4())
-    ext = os.path.splitext(file.filename)[1].lower()
+    original_name = sanitize_filename(file.filename or "unnamed")
+    ext = os.path.splitext(original_name)[1].lower()
     stored_name = f"{file_id}{ext}"
     filepath = os.path.join(UPLOAD_DIR, stored_name)
     
     file_size = 0
     async with aiofiles.open(filepath, 'wb') as f:
         while chunk := await file.read(1024 * 1024):
-            await f.write(chunk)
             file_size += len(chunk)
+            if file_size > MAX_FILE_SIZE:
+                await f.close()
+                os.remove(filepath)
+                raise HTTPException(status_code=413, detail="File too large (max 100MB)")
+            await f.write(chunk)
     
-    # Determine file type
     image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'}
     video_exts = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
     doc_exts = {'.pdf', '.doc', '.docx', '.txt', '.md'}
@@ -281,7 +445,7 @@ async def upload_file(
         "file_id": file_id,
         "user_id": current_user["user_id"],
         "username": current_user["username"],
-        "filename": file.filename,
+        "filename": original_name,
         "stored_name": stored_name,
         "file_type": file_type,
         "content_type": file.content_type or "application/octet-stream",
@@ -346,16 +510,19 @@ async def delete_file(file_id: str, current_user=Depends(get_current_user)):
 async def search(q: str = Query(...), type: str = Query("all"), current_user=Depends(get_optional_user)):
     db = get_db()
     results = {"files": [], "users": []}
+    safe_q = sanitize_search(q)
+    if not safe_q:
+        return results
     
     if type in ("all", "files"):
-        file_query = {"is_public": True, "filename": {"$regex": q, "$options": "i"}}
+        file_query = {"is_public": True, "filename": {"$regex": safe_q, "$options": "i"}}
         cursor = db.files.find(file_query, {"_id": 0}).limit(20)
         results["files"] = await cursor.to_list(length=20)
     
     if type in ("all", "accounts"):
         user_query = {"$or": [
-            {"username": {"$regex": q, "$options": "i"}},
-            {"display_name": {"$regex": q, "$options": "i"}}
+            {"username": {"$regex": safe_q, "$options": "i"}},
+            {"display_name": {"$regex": safe_q, "$options": "i"}}
         ]}
         cursor = db.users.find(user_query, {"_id": 0, "password_hash": 0, "email": 0}).limit(20)
         results["users"] = await cursor.to_list(length=20)
@@ -372,7 +539,6 @@ async def get_chats(current_user=Depends(get_current_user)):
     ).sort("updated_at", -1)
     chats = await cursor.to_list(length=50)
     
-    # Enrich with participant info
     for chat in chats:
         other_id = [p for p in chat["participants"] if p != current_user["user_id"]]
         if other_id:
@@ -459,7 +625,6 @@ async def send_message(chat_id: str, data: SendMessageModel, current_user=Depend
         {"$set": {"last_message": data.content, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
-    # Broadcast via WebSocket
     await manager.broadcast(chat_id, message)
     return message
 
@@ -488,19 +653,22 @@ async def websocket_chat(websocket: WebSocket, chat_id: str):
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "message":
+                content = (data.get("content") or "").strip()
+                if not content or len(content) > 5000:
+                    continue
                 msg_id = str(uuid.uuid4())
                 message = {
                     "message_id": msg_id,
                     "chat_id": chat_id,
                     "sender_id": user_id,
                     "sender_username": payload["username"],
-                    "content": data["content"],
+                    "content": content,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 await db.messages.insert_one({**message})
                 await db.chats.update_one(
                     {"chat_id": chat_id},
-                    {"$set": {"last_message": data["content"], "updated_at": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": {"last_message": content, "updated_at": datetime.now(timezone.utc).isoformat()}}
                 )
                 await manager.broadcast(chat_id, message)
     except WebSocketDisconnect:

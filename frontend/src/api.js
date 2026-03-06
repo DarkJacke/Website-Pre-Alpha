@@ -34,6 +34,8 @@ export const api = {
   getPreviewUrl: (id) => `${API}/api/files/preview/${id}`,
   getDownloadUrl: (id) => `${API}/api/files/download/${id}`,
   
+  changePassword: (data) => request('/api/auth/change-password', { method: 'PUT', body: JSON.stringify(data) }),
+  
   search: (q, type = 'all') => request(`/api/search?q=${encodeURIComponent(q)}&type=${type}`),
   
   getChats: () => request('/api/chats'),

@@ -8,7 +8,6 @@
   --bg-main: #000000;
   --bg-paper: #050505;
   --bg-subtle: #0A0A0A;
-  --wallpaper-url: none;
 }
 
 * {
@@ -22,45 +21,37 @@ body {
   color: #FFFFFF;
   font-family: 'JetBrains Mono', 'Rajdhani', monospace;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
 }
 
 #root {
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #000;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 0;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-color);
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-color); }
 
-/* Selection */
-::selection {
-  background: var(--accent-color);
-  color: #000;
-}
+::selection { background: var(--accent-color); color: #000; }
 
-/* Input autofill */
-input:-webkit-autofill {
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px #0A0A0A inset !important;
   -webkit-text-fill-color: #fff !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
-/* Animations */
+/* ---- ANIMATIONS ---- */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn {
@@ -68,42 +59,51 @@ input:-webkit-autofill {
   to { opacity: 1; }
 }
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-20px); }
+  from { opacity: 0; transform: translateX(-16px); }
   to { opacity: 1; transform: translateX(0); }
 }
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(20px); }
+  from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: translateX(0); }
 }
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 5px rgba(var(--accent-rgb), 0.3); }
-  50% { box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.6); }
-}
 @keyframes messageIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-.animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
-.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-.animate-slide-left { animation: slideInLeft 0.3s ease-out forwards; }
-.animate-slide-right { animation: slideInRight 0.3s ease-out forwards; }
-.animate-message-in { animation: messageIn 0.25s ease-out forwards; }
-
-/* Neon glow */
-.neon-glow {
-  box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.4);
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
-.neon-glow-text {
-  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5);
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-/* Glass */
+.animate-fade-in-up { animation: fadeInUp 0.35s ease-out both; }
+.animate-fade-in { animation: fadeIn 0.25s ease-out both; }
+.animate-slide-left { animation: slideInLeft 0.3s ease-out both; }
+.animate-slide-right { animation: slideInRight 0.3s ease-out both; }
+.animate-message-in { animation: messageIn 0.2s ease-out both; }
+.animate-spin { animation: spin 0.8s linear infinite; }
+
+/* Page transitions */
+.page-enter-active {
+  animation: fadeInUp 0.25s ease-out both;
+}
+.page-exit-active {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+
+/* Glass + Neon */
 .glass {
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+.neon-glow { box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.4); }
+.neon-glow-text { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5); }
 
 /* Wallpaper */
 .wallpaper-bg {
@@ -112,6 +112,21 @@ input:-webkit-autofill {
   background-size: cover;
   background-position: center;
   z-index: 0;
-  opacity: 0.15;
+  opacity: 0.12;
   pointer-events: none;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 767px) {
+  .font-heading { letter-spacing: -0.02em; }
+}
+
+/* Safe area for mobile */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Touch improvements */
+@media (hover: none) {
+  button, a { -webkit-tap-highlight-color: transparent; }
 }

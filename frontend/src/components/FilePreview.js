@@ -10,23 +10,21 @@ export default function FilePreview({ file, onClose }) {
       data-testid="file-preview-modal"
       onClick={onClose}>
       <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
-      <div className="relative z-10 max-w-5xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
-        {/* Controls */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="font-body text-sm text-white/70 truncate">{file.filename}</p>
-          <div className="flex gap-2">
+      <div className="relative z-10 w-full max-w-5xl max-h-[90vh] mx-2 md:mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <p className="font-body text-xs md:text-sm text-white/70 truncate min-w-0 mr-2">{file.filename}</p>
+          <div className="flex gap-2 shrink-0">
             <a href={api.getDownloadUrl(file.file_id)}
               data-testid="preview-download-btn"
               className="p-2 bg-white/10 hover:bg-white/20 transition-colors">
-              <Download size={18} />
+              <Download size={16} />
             </a>
             <button onClick={onClose} data-testid="preview-close-btn"
               className="p-2 bg-white/10 hover:bg-white/20 transition-colors">
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </div>
-        {/* Content */}
         <div className="flex items-center justify-center">
           {file.file_type === 'image' ? (
             <img src={api.getPreviewUrl(file.file_id)} alt={file.filename}
