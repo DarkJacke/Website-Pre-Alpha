@@ -27,6 +27,8 @@ export const api = {
   forgotPassword: (email) => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token, newPassword) => request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, new_password: newPassword }) }),
   googleAuth: (sessionId) => request('/api/auth/google', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
+  githubAuthUrl: (redirectUri) => request(`/api/auth/github/url?redirect_uri=${encodeURIComponent(redirectUri)}`),
+  githubAuth: (code) => request('/api/auth/github', { method: 'POST', body: JSON.stringify({ code }) }),
 
   // Users
   getUser: (id) => request(`/api/users/${id}`),

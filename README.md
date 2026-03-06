@@ -1,66 +1,90 @@
-# CyberVoid Hub - Secure File Storage Platform
+<div align="center">
 
-A modern, cyberpunk-themed file storage hub with real-time messaging, secure vault, share links, and full theme customization. Built with React + FastAPI + MongoDB.
+# CyberVoid Hub
+
+**Secure File Storage Platform**
+
+A cyberpunk-themed file storage hub with real-time messaging, encrypted vault, shareable links, social login, and full theme customization.
+
+Built with **React** + **FastAPI** + **MongoDB**
+
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![License](https://img.shields.io/badge/License-MIT-FF2A6D)](LICENSE)
+
+</div>
 
 ---
 
 ## Features
 
 ### File Management
-- **Upload** any file type up to 100MB (drag & drop or click)
-- **Download** files directly
-- **Online Preview** for images and videos (full-screen modal)
-- **Grid/List view** with file type filters (image, video, document, other)
-- **Public/Private** toggle per file
+- Upload any file type up to 100MB
+- Online preview for images and videos (full-screen modal)
+- Grid/List view with type filters (image, video, document, other)
+- **File folders** - organize files into named folders
+- **Move files** between folders
+- **Bulk select & delete** - manage multiple files at once
 
-### Share Links (NEW)
-- **Generate temporary download links** with custom expiration (1h, 6h, 24h, 7 days, 30 days)
-- **Share with anyone** - no account required to download
-- **Download counter** tracks how many times each link was used
-- **Auto-expire** - links become invalid after set time
-- **Copy to clipboard** one-click sharing
+### Share Links
+- Generate temporary download links (1h to 30 days expiry)
+- Share with anyone - no account required
+- Download counter tracks link usage
+- Preview and download via shared link
+- One-click copy to clipboard
 
-### Secure Vault (NEW)
-- **Password-protected folder** - separate password from your account
-- **30-minute sessions** - vault auto-locks after 30 min of inactivity
-- **Upload directly to vault** - files never appear in your public dashboard
-- **Separate bcrypt-hashed password** for vault access
-- **Visual lock/unlock** interface
+### Secure Vault
+- Separate password-protected storage area
+- 30-minute sessions - auto-locks after inactivity
+- Upload directly to vault (files never appear in public dashboard)
+- Bcrypt-hashed vault password
+- Visual lock/unlock interface
 
 ### User System
 - **Register & Login** with JWT authentication
-- **User Profiles** viewable by anyone via user ID
-- **Custom Avatar** - upload your own profile picture (max 5MB)
-- **Display Name** (nickname) - different from username, shown to other users
-- **Username** (unique) - used for searching and mentioning
-- **Bio** field for profile description
-- **Copy User ID** to share your profile
+- **Google OAuth** social login (via Emergent Auth)
+- **GitHub OAuth** social login (requires GitHub App credentials)
+- **Forgot Password** - email-based reset flow (code-based)
+- Custom avatar upload (max 5MB)
+- Display name, bio, and username customization
+- Public user profiles with file showcase
 
 ### Real-Time Chat
-- **WebSocket-powered** instant messaging
-- **Start conversations** from search results or user profiles
-- **Message history** persisted in MongoDB
-- **Chat list** with last message preview
+- WebSocket-powered instant messaging
+- **Typing indicators** - see when others are typing
+- **Read receipts** - double-check marks for read messages
+- Start conversations from search or user profiles
+- Message history persisted in MongoDB
 
 ### Search
-- **Dual search** - files and user accounts
-- **Category toggle** - All, Files, Accounts
-- **Quick actions** - view profile, start chat, download
+- Dual search: files and user accounts
+- Category toggle: All, Files, Accounts
+- Quick actions: view profile, start chat, download
+
+### Notifications & Storage
+- **Notification settings** - toggle push, chat, and file notifications
+- **Storage quota** - visual progress bar showing usage (1GB default)
+- Per-file size tracking and aggregate stats
+
+### File Comments
+- Add comments to any file
+- View comment threads with timestamps
+- Delete your own comments
 
 ### Theme Customization
-- **8 Accent Colors**: Neon Red, Neon Pink, Electric Blue, Acid Green, Cyber Yellow, Void Purple, Sunset Orange, Ice White
-- **Wallpaper System**: 3 presets + custom URL
-- **AMOLED Black** base (#000000)
-- **Persistent** - saved to your account
+- 8 accent colors: Neon Red, Pink, Electric Blue, Acid Green, Cyber Yellow, Void Purple, Sunset Orange, Ice White
+- Wallpaper system: 3 presets + custom URL
+- AMOLED Black base (#000000)
+- Settings saved to user account
 
 ### Security
-- **Bcrypt** hashing (12 rounds) for passwords
-- **JWT tokens** with 30-day expiration
-- **Rate limiting** (5 login/email, 10/IP per 5 min)
-- **Input validation** everywhere
-- **Search sanitization** (anti-regex injection)
-- **File name sanitization**
-- **WebSocket authentication**
+- Bcrypt hashing (12 rounds) for passwords
+- JWT tokens with 30-day expiration
+- Rate limiting (5 login attempts/email, 10/IP per 5 min)
+- Input validation and search sanitization
+- File name sanitization
+- WebSocket authentication
 
 ---
 
@@ -70,8 +94,8 @@ A modern, cyberpunk-themed file storage hub with real-time messaging, secure vau
 |-------|-----------|
 | Frontend | React 18 + Tailwind CSS |
 | Backend | Python FastAPI |
-| Database | MongoDB (Motor async) |
-| Auth | JWT + bcrypt |
+| Database | MongoDB (Motor async driver) |
+| Auth | JWT + bcrypt + OAuth 2.0 |
 | Real-time | WebSockets |
 | Fonts | Orbitron, JetBrains Mono, Rajdhani |
 | Icons | Lucide React |
@@ -81,181 +105,288 @@ A modern, cyberpunk-themed file storage hub with real-time messaging, secure vau
 ## Project Structure
 
 ```
-/app
+cybervoid-hub/
 ├── backend/
-│   ├── server.py          # All API routes, WebSocket, auth, vault, sharing
-│   ├── .env               # Environment variables
-│   ├── requirements.txt   # Python dependencies
-│   └── uploads/           # Stored files (gitignored in production)
+│   ├── server.py              # All API routes, WebSocket, auth
+│   ├── .env                   # Environment variables
+│   ├── requirements.txt       # Python dependencies
+│   └── uploads/               # Stored files
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── api.js              # API client
-│   │   ├── App.js              # Main layout + routing
+│   │   ├── api.js             # API client (all endpoints)
+│   │   ├── App.js             # Layout + page routing
+│   │   ├── index.css          # Global styles + animations
 │   │   ├── contexts/
-│   │   │   ├── AuthContext.js   # JWT auth
-│   │   │   └── ThemeContext.js  # Theme management
+│   │   │   ├── AuthContext.js  # JWT + OAuth auth state
+│   │   │   └── ThemeContext.js # Theme management
 │   │   └── components/
-│   │       ├── AuthPage.js      # Login/Register
-│   │       ├── Sidebar.js       # Navigation
-│   │       ├── Dashboard.js     # File grid with share
-│   │       ├── UploadPage.js    # File upload
-│   │       ├── ChatPage.js      # Messaging
-│   │       ├── SettingsPage.js  # Profile, security, themes
-│   │       ├── ProfilePage.js   # Public profiles
-│   │       ├── SearchResults.js # Search
-│   │       ├── FilePreview.js   # Image/video viewer
-│   │       ├── VaultPage.js     # Secure vault
-│   │       └── ShareModal.js    # Share link creation
-│   └── .env               # REACT_APP_BACKEND_URL
+│   │       ├── AuthPage.js    # Login/Register/Forgot/OAuth
+│   │       ├── Dashboard.js   # File grid + folders + bulk ops
+│   │       ├── UploadPage.js  # File upload
+│   │       ├── ChatPage.js    # Messaging + typing/receipts
+│   │       ├── SettingsPage.js# Profile, security, themes, storage
+│   │       ├── ProfilePage.js # Public user profiles
+│   │       ├── VaultPage.js   # Secure vault
+│   │       ├── ShareModal.js  # Share link creation
+│   │       ├── SearchResults.js# Search
+│   │       ├── FilePreview.js # Image/video viewer
+│   │       └── Sidebar.js     # Navigation
+│   └── .env                   # REACT_APP_BACKEND_URL
 │
 └── README.md
 ```
 
 ---
 
-## API Routes
+## API Reference
 
-### Auth
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/auth/register` | Create account |
-| POST | `/api/auth/login` | Login |
-| GET | `/api/auth/me` | Current user |
-| PUT | `/api/auth/change-password` | Change password |
+### Authentication
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/auth/register` | - | Create account |
+| POST | `/api/auth/login` | - | Login with email/password |
+| GET | `/api/auth/me` | JWT | Current user info |
+| PUT | `/api/auth/change-password` | JWT | Change password |
+| POST | `/api/auth/forgot-password` | - | Request password reset code |
+| POST | `/api/auth/reset-password` | - | Reset password with token |
+| POST | `/api/auth/google` | - | Google OAuth callback |
+| GET | `/api/auth/github/url` | - | Get GitHub OAuth URL |
+| POST | `/api/auth/github` | - | GitHub OAuth callback |
 
 ### Users
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/users/{user_id}` | Public profile |
-| PUT | `/api/users/profile` | Update display name, bio |
-| PUT | `/api/users/theme` | Update theme settings |
-| POST | `/api/users/avatar` | Upload custom avatar |
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| GET | `/api/users/{user_id}` | - | Public profile |
+| PUT | `/api/users/profile` | JWT | Update display name, bio |
+| PUT | `/api/users/theme` | JWT | Update theme settings |
+| POST | `/api/users/avatar` | JWT | Upload avatar (max 5MB) |
 
 ### Files
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/files/upload` | Upload file |
-| GET | `/api/files` | My files |
-| GET | `/api/files/public/{user_id}` | User's public files |
-| GET | `/api/files/preview/{file_id}` | Preview/stream |
-| GET | `/api/files/download/{file_id}` | Download |
-| DELETE | `/api/files/{file_id}` | Delete file |
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/files/upload` | JWT | Upload file (multipart) |
+| GET | `/api/files` | JWT | List my files |
+| GET | `/api/files/public/{user_id}` | - | User's public files |
+| GET | `/api/files/preview/{file_id}` | - | Preview/stream file |
+| GET | `/api/files/download/{file_id}` | - | Download file |
+| DELETE | `/api/files/{file_id}` | JWT | Delete file |
+| PUT | `/api/files/{file_id}/move` | JWT | Move to folder |
+| POST | `/api/files/bulk-delete` | JWT | Bulk delete files |
+
+### Folders
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/folders` | JWT | Create folder |
+| GET | `/api/folders` | JWT | List my folders |
+| DELETE | `/api/folders/{folder_id}` | JWT | Delete folder |
+
+### Comments
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/files/{file_id}/comments` | JWT | Add comment |
+| GET | `/api/files/{file_id}/comments` | - | List comments |
+| DELETE | `/api/comments/{comment_id}` | JWT | Delete comment |
 
 ### Share Links
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/share` | Create share link |
-| GET | `/api/share/{link_id}` | Get share info |
-| GET | `/api/share/{link_id}/download` | Download via link |
-| GET | `/api/share/{link_id}/preview` | Preview via link |
-| GET | `/api/my-shares` | My share links |
-| DELETE | `/api/share/{link_id}` | Delete share link |
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/share` | JWT | Create share link |
+| GET | `/api/share/{link_id}` | - | Get share info |
+| GET | `/api/share/{link_id}/download` | - | Download via link |
+| GET | `/api/share/{link_id}/preview` | - | Preview via link |
+| GET | `/api/my-shares` | JWT | My share links |
+| DELETE | `/api/share/{link_id}` | JWT | Delete link |
 
 ### Vault
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/vault/setup` | Create vault password |
-| POST | `/api/vault/unlock` | Unlock (get 30min token) |
-| GET | `/api/vault/status` | Check vault status |
-| POST | `/api/vault/upload` | Upload to vault |
-| GET | `/api/vault/files` | List vault files |
-| DELETE | `/api/vault/files/{id}` | Delete vault file |
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/vault/setup` | JWT | Create vault password |
+| POST | `/api/vault/unlock` | JWT | Unlock (30min token) |
+| GET | `/api/vault/status` | JWT | Check vault status |
+| POST | `/api/vault/upload` | JWT+Vault | Upload to vault |
+| GET | `/api/vault/files` | JWT+Vault | List vault files |
+| DELETE | `/api/vault/files/{id}` | JWT+Vault | Delete vault file |
 
 ### Chat
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| GET | `/api/chats` | JWT | My conversations |
+| POST | `/api/chats` | JWT | Create conversation |
+| GET | `/api/chats/{id}/messages` | JWT | Get messages |
+| POST | `/api/chats/{id}/messages` | JWT | Send message |
+| POST | `/api/chats/{id}/read` | JWT | Mark as read |
+| WS | `/api/ws/chat/{id}` | JWT | Real-time WebSocket |
+
+### Storage & Notifications
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| GET | `/api/storage` | JWT | Storage usage stats |
+| GET | `/api/notifications/settings` | JWT | Get notification prefs |
+| PUT | `/api/notifications/settings` | JWT | Update notification prefs |
+
+### Other
 | Method | Route | Description |
 |--------|-------|-------------|
-| GET | `/api/chats` | My conversations |
-| POST | `/api/chats` | Create conversation |
-| GET/POST | `/api/chats/{id}/messages` | Messages |
-| WS | `/api/ws/chat/{id}` | Real-time WebSocket |
+| GET | `/api/health` | Health check |
+| GET | `/api/search?q=&type=` | Search files/users |
 
 ---
 
-## Deployment Tutorials
+## Deployment
 
-### Option 1: Deploy to Railway (Recommended for beginners)
+### Option 1: Docker Compose (Recommended)
 
-Railway provides free MongoDB and file storage.
+```bash
+git clone https://github.com/your-user/cybervoid-hub.git
+cd cybervoid-hub
+```
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8001:8001"
+    env_file: ./backend/.env
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  uploads:
+  mongo_data:
+```
+
+Create `Dockerfile.backend`:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ .
+RUN mkdir -p uploads
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+Create `frontend/Dockerfile`:
+
+```dockerfile
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY . .
+RUN yarn build
+
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+```
+
+```bash
+docker-compose up -d
+```
+
+### Option 2: Railway
 
 ```bash
 # 1. Install Railway CLI
 npm install -g @railway/cli
 
-# 2. Login
+# 2. Login & init
 railway login
-
-# 3. Create new project
 railway init
 
-# 4. Add MongoDB
+# 3. Add MongoDB plugin
 railway add --plugin mongodb
 
-# 5. Set environment variables in Railway dashboard:
+# 4. Set environment variables in Railway dashboard:
 #    MONGO_URL = (auto from MongoDB plugin)
 #    DB_NAME = filehub
-#    JWT_SECRET = your-secure-random-string-here
+#    JWT_SECRET = your-secure-random-string
 #    UPLOAD_DIR = /app/uploads
 #    APP_URL = https://your-app.railway.app
 
-# 6. Deploy
+# 5. Deploy
 railway up
 ```
 
-### Option 2: Deploy to Render
+### Option 3: Render
+
+1. Create a [Render](https://render.com) account
+2. **Backend**: New > Web Service > Connect GitHub repo
+   - Build: `pip install -r backend/requirements.txt`
+   - Start: `uvicorn backend.server:app --host 0.0.0.0 --port $PORT`
+   - Add environment variables
+3. **Frontend**: New > Static Site
+   - Build: `cd frontend && yarn install && yarn build`
+   - Publish: `frontend/build`
+4. **Database**: New > MongoDB or use [MongoDB Atlas](https://www.mongodb.com/atlas) free tier
+
+### Option 4: VPS (DigitalOcean, Linode, Hetzner)
 
 ```bash
-# 1. Create a Render account at render.com
-# 2. New > Web Service > Connect your GitHub repo
-# 3. Configuration:
-#    Build Command: pip install -r backend/requirements.txt
-#    Start Command: uvicorn backend.server:app --host 0.0.0.0 --port $PORT
-# 4. Add environment variables in dashboard
-# 5. For frontend: New > Static Site > Build: cd frontend && yarn build
-#    Publish: frontend/build
-```
-
-### Option 3: Deploy to a VPS (DigitalOcean, Linode, etc.)
-
-```bash
-# 1. SSH into your server
+# SSH into server
 ssh root@your-server-ip
 
-# 2. Install dependencies
-apt update && apt install -y python3-pip nodejs npm nginx certbot mongodb
+# Install dependencies
+apt update && apt install -y python3-pip nodejs npm nginx certbot
 
-# 3. Clone your repo
+# Install MongoDB
+# See: https://www.mongodb.com/docs/manual/installation/
+
+# Clone & setup backend
 git clone https://github.com/your-user/cybervoid-hub.git
-cd cybervoid-hub
-
-# 4. Setup backend
-cd backend
+cd cybervoid-hub/backend
 pip3 install -r requirements.txt
-# Create .env with your production values
+# Create .env with production values
 
-# 5. Setup frontend
+# Build frontend
 cd ../frontend
 npm install && npm run build
 
-# 6. Setup Nginx (see Nginx config below)
-# 7. Setup systemd service (see below)
-# 8. Setup SSL with certbot
+# Setup Nginx reverse proxy (config below)
+# Setup systemd service (config below)
+# Setup SSL
 certbot --nginx -d yourdomain.com
 ```
 
-**Nginx Configuration:**
+<details>
+<summary>Nginx config</summary>
+
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com;
 
-    # Frontend (built React app)
     location / {
         root /path/to/cybervoid-hub/frontend/build;
         try_files $uri $uri/ /index.html;
     }
 
-    # Backend API proxy
     location /api {
         proxy_pass http://127.0.0.1:8001;
         proxy_http_version 1.1;
@@ -268,7 +399,11 @@ server {
 }
 ```
 
-**Systemd Service:**
+</details>
+
+<details>
+<summary>Systemd service</summary>
+
 ```ini
 # /etc/systemd/system/cybervoid.service
 [Unit]
@@ -286,251 +421,161 @@ EnvironmentFile=/path/to/cybervoid-hub/backend/.env
 WantedBy=multi-user.target
 ```
 
-### Option 4: Deploy with Docker
+</details>
 
-```dockerfile
-# Dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY backend/requirements.txt .
-RUN pip install -r requirements.txt
-COPY backend/ .
-RUN mkdir -p uploads
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
-```
+### Option 5: GitHub Codespaces
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  backend:
-    build: .
-    ports:
-      - "8001:8001"
-    env_file: ./backend/.env
-    volumes:
-      - ./uploads:/app/uploads
-    depends_on:
-      - mongo
-
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:80"
-
-volumes:
-  mongo_data:
-```
-
----
-
-## Local Deployment with SSD/HDD Storage
-
-### Connect to a Local Drive (SSD/HDD)
-
-You can configure the app to store files on any mounted drive.
+1. Fork this repository
+2. Click **Code** > **Codespaces** > **Create codespace on main**
+3. In the terminal:
 
 ```bash
-# 1. Mount your SSD/HDD (if not already mounted)
-sudo mkdir -p /mnt/storage
-sudo mount /dev/sdb1 /mnt/storage
+# Install backend dependencies
+cd backend
+pip install -r requirements.txt
 
-# Make it permanent (add to /etc/fstab):
-echo '/dev/sdb1 /mnt/storage ext4 defaults 0 2' | sudo tee -a /etc/fstab
+# Start MongoDB (if not running)
+mongod --fork --logpath /tmp/mongo.log
 
-# 2. Create the uploads directory on the drive
-sudo mkdir -p /mnt/storage/cybervoid-files
-sudo chown -R $USER:$USER /mnt/storage/cybervoid-files
+# Create .env
+cat > .env << 'EOF'
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=filehub
+JWT_SECRET=dev-secret-change-in-production
+UPLOAD_DIR=./uploads
+EOF
 
-# 3. Update your backend .env:
-UPLOAD_DIR=/mnt/storage/cybervoid-files
+# Start backend
+uvicorn server:app --host 0.0.0.0 --port 8001 &
 
-# 4. Restart the backend
-sudo systemctl restart cybervoid
+# Install and start frontend
+cd ../frontend
+yarn install
+
+# Update .env to point to the codespace URL
+echo "REACT_APP_BACKEND_URL=https://$CODESPACE_NAME-8001.app.github.dev" > .env
+
+yarn start
 ```
 
-### Encrypted Storage Folder
-
-Protect all uploaded files with filesystem-level encryption using LUKS.
-
-```bash
-# 1. Create an encrypted container file (10GB example)
-dd if=/dev/zero of=/mnt/storage/cybervoid-vault.img bs=1M count=10240
-
-# 2. Setup LUKS encryption
-sudo cryptsetup luksFormat /mnt/storage/cybervoid-vault.img
-# Enter and confirm your encryption password
-
-# 3. Open the encrypted container
-sudo cryptsetup luksOpen /mnt/storage/cybervoid-vault.img cybervoid-encrypted
-
-# 4. Create filesystem
-sudo mkfs.ext4 /dev/mapper/cybervoid-encrypted
-
-# 5. Mount
-sudo mkdir -p /mnt/cybervoid-secure
-sudo mount /dev/mapper/cybervoid-encrypted /mnt/cybervoid-secure
-sudo chown -R $USER:$USER /mnt/cybervoid-secure
-
-# 6. Update backend .env
-UPLOAD_DIR=/mnt/cybervoid-secure
-
-# 7. To lock (unmount + close encryption):
-sudo umount /mnt/cybervoid-secure
-sudo cryptsetup luksClose cybervoid-encrypted
-
-# 8. To unlock again:
-sudo cryptsetup luksOpen /mnt/storage/cybervoid-vault.img cybervoid-encrypted
-sudo mount /dev/mapper/cybervoid-encrypted /mnt/cybervoid-secure
-```
-
-**Auto-mount script (save as /usr/local/bin/cybervoid-unlock.sh):**
-```bash
-#!/bin/bash
-echo "Unlocking CyberVoid encrypted storage..."
-sudo cryptsetup luksOpen /mnt/storage/cybervoid-vault.img cybervoid-encrypted
-sudo mount /dev/mapper/cybervoid-encrypted /mnt/cybervoid-secure
-echo "Storage unlocked. Starting CyberVoid..."
-sudo systemctl start cybervoid
-```
-
-**Auto-lock script (save as /usr/local/bin/cybervoid-lock.sh):**
-```bash
-#!/bin/bash
-echo "Stopping CyberVoid..."
-sudo systemctl stop cybervoid
-echo "Locking encrypted storage..."
-sudo umount /mnt/cybervoid-secure
-sudo cryptsetup luksClose cybervoid-encrypted
-echo "Storage locked."
-```
-
----
-
-## Customization Guide
-
-### Change Default Accent Color
-Edit `frontend/src/index.css`:
-```css
-:root {
-  --accent-color: #YOUR_HEX;
-  --accent-rgb: R, G, B;
-}
-```
-
-### Add Accent Color Presets
-Edit `frontend/src/contexts/ThemeContext.js`, add to `ACCENT_PRESETS`:
-```js
-{ name: 'My Color', color: '#HEX', rgb: 'R,G,B' },
-```
-
-### Add Wallpaper Presets
-Same file, add to `WALLPAPERS`:
-```js
-{ name: 'Name', url: 'https://image-url.jpg' },
-```
-
-### Change Fonts
-1. Update `<link>` in `frontend/public/index.html`
-2. Update `tailwind.config.js` `fontFamily`
-3. Update `index.css` body `font-family`
-
-### Add Custom File Type Previews
-In `Dashboard.js` and `FilePreview.js`, add conditions:
-```jsx
-// For PDFs:
-if (file.file_type === 'pdf') {
-  return <iframe src={api.getPreviewUrl(file.file_id)} className="w-full h-full" />;
-}
-```
-
-### Extend Chat
-In `server.py` WebSocket handler, add new message types:
-```python
-if data.get("type") == "typing":
-    await manager.broadcast(chat_id, {"type": "typing", "user": user_id})
-```
-
-### Add New Sidebar Sections
-Edit `Sidebar.js` - add to `navItems` array:
-```jsx
-{ id: 'mypage', icon: MyIcon, label: 'My Page' },
-```
-Then add the case in `App.js` `renderPage()`.
-
-### Change Avatar Generation Style
-The default avatars use DiceBear API. Change the style in `server.py`:
-```python
-# Options: bottts, avataaars, identicon, pixel-art, lorelei, notionists
-avatar_url = f"https://api.dicebear.com/7.x/pixel-art/svg?seed={data.username}"
-```
-
-### Increase File Size Limit
-In `backend/server.py`:
-```python
-MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
-```
-Also update Nginx `client_max_body_size` if using reverse proxy.
-
-### Add Storage Quotas
-In `server.py`, before file upload:
-```python
-total = await db.files.aggregate([
-    {"$match": {"user_id": current_user["user_id"]}},
-    {"$group": {"_id": None, "total": {"$sum": "$file_size"}}}
-]).to_list(1)
-if total and total[0]["total"] > 1 * 1024 * 1024 * 1024:  # 1GB
-    raise HTTPException(status_code=400, detail="Storage limit reached")
-```
+4. Open the **Ports** tab and make ports 3000 and 8001 public
 
 ---
 
 ## Environment Variables
 
-### Backend (`/backend/.env`)
+### Backend (`backend/.env`)
+
 ```env
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=filehub
 JWT_SECRET=change-this-to-a-random-64-char-string
 UPLOAD_DIR=/path/to/uploads
 APP_URL=https://yourdomain.com
+
+# Optional: GitHub OAuth (register at https://github.com/settings/developers)
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 ```
 
-### Frontend (`/frontend/.env`)
+### Frontend (`frontend/.env`)
+
 ```env
 REACT_APP_BACKEND_URL=https://yourdomain.com
 ```
 
 ---
 
-## Future Improvements
+## GitHub OAuth Setup
 
-- [ ] Typing indicators in chat
-- [ ] Read receipts
+To enable "Login with GitHub":
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. Fill in:
+   - **Application name**: CyberVoid Hub
+   - **Homepage URL**: `https://yourdomain.com`
+   - **Authorization callback URL**: `https://yourdomain.com`
+4. Copy the **Client ID** and generate a **Client Secret**
+5. Add to `backend/.env`:
+   ```
+   GITHUB_CLIENT_ID=your_client_id
+   GITHUB_CLIENT_SECRET=your_client_secret
+   ```
+6. Restart the backend
+
+---
+
+## Local Storage Options
+
+### Mount External Drive
+
+```bash
+# Mount SSD/HDD
+sudo mkdir -p /mnt/storage
+sudo mount /dev/sdb1 /mnt/storage
+
+# Create uploads dir
+sudo mkdir -p /mnt/storage/cybervoid-files
+sudo chown -R $USER:$USER /mnt/storage/cybervoid-files
+
+# Update backend .env
+UPLOAD_DIR=/mnt/storage/cybervoid-files
+```
+
+### Encrypted Storage (LUKS)
+
+<details>
+<summary>Full encrypted storage setup</summary>
+
+```bash
+# Create 10GB encrypted container
+dd if=/dev/zero of=/mnt/storage/vault.img bs=1M count=10240
+sudo cryptsetup luksFormat /mnt/storage/vault.img
+sudo cryptsetup luksOpen /mnt/storage/vault.img cybervoid-encrypted
+sudo mkfs.ext4 /dev/mapper/cybervoid-encrypted
+sudo mkdir -p /mnt/cybervoid-secure
+sudo mount /dev/mapper/cybervoid-encrypted /mnt/cybervoid-secure
+sudo chown -R $USER:$USER /mnt/cybervoid-secure
+
+# Update .env: UPLOAD_DIR=/mnt/cybervoid-secure
+
+# Lock: sudo umount /mnt/cybervoid-secure && sudo cryptsetup luksClose cybervoid-encrypted
+# Unlock: sudo cryptsetup luksOpen /mnt/storage/vault.img cybervoid-encrypted && sudo mount ...
+```
+
+</details>
+
+---
+
+## Customization
+
+| What | Where | How |
+|------|-------|-----|
+| Default accent color | `frontend/src/index.css` | Change `--accent-color` and `--accent-rgb` |
+| Add accent presets | `frontend/src/contexts/ThemeContext.js` | Add to `ACCENT_PRESETS` array |
+| Add wallpapers | Same file | Add to `WALLPAPERS` array |
+| Change fonts | `frontend/public/index.html` + `tailwind.config.js` | Update `<link>` and `fontFamily` |
+| File size limit | `backend/server.py` | Change `MAX_FILE_SIZE` |
+| Storage quota | `backend/server.py` | Change `storage_quota` in user creation |
+| Avatar style | `backend/server.py` | Change DiceBear URL style (bottts, pixel-art, etc.) |
+
+---
+
+## Future Roadmap
+
 - [ ] File versioning
-- [ ] 2FA authentication
-- [ ] OAuth login (Google, GitHub)
-- [ ] Admin panel
-- [ ] Storage quotas per user
-- [ ] Folder organization
-- [ ] File comments
-- [ ] Email notifications
-- [ ] Bulk file operations
+- [ ] Two-factor authentication (2FA)
+- [ ] Admin panel with user management
 - [ ] File encryption at rest (per-file)
-- [ ] CDN integration for faster file delivery
+- [ ] CDN integration for faster delivery
 - [ ] Mobile native app (React Native)
+- [ ] Email notification service integration
+- [ ] File drag-and-drop between folders
 
 ---
 
 ## License
 
 MIT
+

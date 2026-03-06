@@ -27,6 +27,8 @@ DB_NAME = os.environ.get("DB_NAME")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/app/backend/uploads")
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -808,6 +810,92 @@ async def google_oauth_session(request: Request, response: Response):
         token = create_token(user_id, username)
         user = user_doc
     
+    user_resp = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0, "vault_hash": 0})
+    return {"token": token, "user": user_resp}
+
+# ---- GITHUB OAUTH ----
+@app.get("/api/auth/github/url")
+async def github_auth_url(request: Request):
+    if not GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=501, detail="GitHub login not configured")
+    redirect_uri = request.query_params.get("redirect_uri", "")
+    state = secrets.token_urlsafe(16)
+    url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={redirect_uri}&scope=user:email&state={state}"
+    return {"url": url, "state": state}
+
+@app.post("/api/auth/github")
+async def github_oauth_callback(request: Request):
+    body = await request.json()
+    code = body.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code")
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="GitHub login not configured")
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://github.com/login/oauth/access_token",
+            json={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET, "code": code},
+            headers={"Accept": "application/json"},
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="GitHub token exchange failed")
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=401, detail=token_data.get("error_description", "GitHub auth failed"))
+
+        user_resp = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+        )
+        gh_user = user_resp.json()
+
+        emails_resp = await client.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+        )
+        emails = emails_resp.json()
+        primary_email = next((e["email"] for e in emails if e.get("primary")), None) or gh_user.get("email")
+        if not primary_email:
+            raise HTTPException(status_code=400, detail="Could not get email from GitHub")
+
+    db = get_db()
+    email = primary_email.lower()
+    user = await db.users.find_one({"email": email})
+
+    if user:
+        token = create_token(user["user_id"], user["username"])
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {
+            "last_login": datetime.now(timezone.utc).isoformat(),
+            "avatar_url": user.get("avatar_url") or gh_user.get("avatar_url", ""),
+        }})
+    else:
+        user_id = str(uuid.uuid4())
+        username = (gh_user.get("login") or email.split("@")[0]).replace("-", "_")[:24]
+        existing = await db.users.find_one({"username": username})
+        if existing:
+            username = f"{username}_{uuid.uuid4().hex[:4]}"
+        user_doc = {
+            "user_id": user_id,
+            "username": username,
+            "email": email,
+            "password_hash": "",
+            "display_name": gh_user.get("name") or username,
+            "bio": gh_user.get("bio") or "",
+            "avatar_url": gh_user.get("avatar_url", f"https://api.dicebear.com/7.x/bottts/svg?seed={username}"),
+            "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": datetime.now(timezone.utc).isoformat(),
+            "oauth_provider": "github",
+            "storage_used": 0,
+            "storage_quota": 1073741824,
+            "notification_settings": {"push_enabled": True, "chat_notifications": True, "file_notifications": True},
+        }
+        await db.users.insert_one(user_doc)
+        token = create_token(user_id, username)
+        user = user_doc
+
     user_resp = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0, "vault_hash": 0})
     return {"token": token, "user": user_resp}
 
