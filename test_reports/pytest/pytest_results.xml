@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="16" skipped="0" tests="31" time="5.803" timestamp="2026-03-06T17:01:48.295025+00:00" hostname="agent-env-87ad93ac-5afd-4f6b-a921-8fa29ac61a8f"><testcase classname="backend.tests.test_all_features.TestHealthCheck" name="test_health" time="0.266" /><testcase classname="backend.tests.test_all_features.TestAuthRegistration" name="test_register_user_1" time="0.109" /><testcase classname="backend.tests.test_all_features.TestAuthRegistration" name="test_register_user_2" time="0.111" /><testcase classname="backend.tests.test_all_features.TestAuthRegistration" name="test_register_validation_short_username" time="0.113" /><testcase classname="backend.tests.test_all_features.TestAuthRegistration" name="test_register_validation_weak_password" time="0.102" /><testcase classname="backend.tests.test_all_features.TestAuthLogin" name="test_login_valid_credentials" time="0.388" /><testcase classname="backend.tests.test_all_features.TestAuthLogin" name="test_login_invalid_credentials" time="0.357" /><testcase classname="backend.tests.test_all_features.TestForgotPassword" name="test_forgot_password_request" time="0.122" /><testcase classname="backend.tests.test_all_features.TestForgotPassword" name="test_forgot_password_nonexistent_email" time="0.105" /><testcase classname="backend.tests.test_all_features.TestForgotPassword" name="test_reset_password_flow" time="0.564" /><testcase classname="backend.tests.test_all_features.TestFilesAndFolders" name="test_get_files" time="0.470" /><testcase classname="backend.tests.test_all_features.TestFilesAndFolders" name="test_create_folder" time="0.469" /><testcase classname="backend.tests.test_all_features.TestFilesAndFolders" name="test_get_folders" time="0.115"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:178: in test_get_folders
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestFilesAndFolders" name="test_file_upload_and_move" time="0.126"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:187: in test_file_upload_and_move
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestFilesAndFolders" name="test_bulk_delete" time="0.142"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:215: in test_bulk_delete
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestFileComments" name="test_add_and_get_comments" time="0.135"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:243: in test_add_and_get_comments
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestStorageAndNotifications" name="test_get_storage" time="0.118"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:275: in test_get_storage
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestStorageAndNotifications" name="test_get_notification_settings" time="0.113"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:288: in test_get_notification_settings
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestStorageAndNotifications" name="test_update_notification_settings" time="0.110"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:298: in test_update_notification_settings
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestShareLinks" name="test_create_and_access_share_link" time="0.101"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:312: in test_create_and_access_share_link
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestVault" name="test_vault_status" time="0.111"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:344: in test_vault_status
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestVault" name="test_vault_setup_or_unlock" time="0.120"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:355: in test_vault_setup_or_unlock
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestSearch" name="test_search_files" time="0.114" /><testcase classname="backend.tests.test_all_features.TestSearch" name="test_search_accounts" time="0.120" /><testcase classname="backend.tests.test_all_features.TestSearch" name="test_search_all" time="0.136" /><testcase classname="backend.tests.test_all_features.TestProfile" name="test_get_me" time="0.157"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:412: in test_get_me
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestProfile" name="test_update_profile" time="0.112"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:423: in test_update_profile
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestProfile" name="test_get_user_profile" time="0.127"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:433: in test_get_user_profile
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestChat" name="test_create_chat_and_send_message" time="0.203"><failure message="assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_all_features.py:452: in test_create_chat_and_send_message
+    assert response1.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_all_features.TestChat" name="test_get_chats" time="0.116"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:486: in test_get_chats
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase><testcase classname="backend.tests.test_all_features.TestChat" name="test_mark_as_read" time="0.141"><failure message="AssertionError: Failed to get token&#10;assert None">backend/tests/test_all_features.py:495: in test_mark_as_read
+    assert token, "Failed to get token"
+E   AssertionError: Failed to get token
+E   assert None</failure></testcase></testsuite></testsuites>

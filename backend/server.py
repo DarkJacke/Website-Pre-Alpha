@@ -2,15 +2,15 @@ import os
 import re
 import uuid
 import time
-import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List
 from contextlib import asynccontextmanager
 from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Query, Request
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Query, Request, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
@@ -18,6 +18,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 import aiofiles
+import httpx
 
 load_dotenv()
 
@@ -148,6 +149,11 @@ async def lifespan(app: FastAPI):
     await db.chats.create_index("chat_id", unique=True)
     await db.share_links.create_index("link_id", unique=True)
     await db.share_links.create_index("expires_at")
+    await db.folders.create_index("user_id")
+    await db.comments.create_index("file_id")
+    await db.password_resets.create_index("token", unique=True)
+    await db.password_resets.create_index("expires_at")
+    await db.oauth_sessions.create_index("session_token")
     yield
     app.state.mongo_client.close()
 
@@ -247,6 +253,44 @@ class SendMessageModel(BaseModel):
             raise ValueError("Message too long")
         return v.strip()
 
+class ForgotPasswordModel(BaseModel):
+    email: str
+
+class ResetPasswordModel(BaseModel):
+    token: str
+    new_password: str
+    
+    @field_validator('new_password')
+    @classmethod
+    def check_pw(cls, v):
+        return validate_password(v)
+
+class CreateFolderModel(BaseModel):
+    name: str
+    
+    @field_validator('name')
+    @classmethod
+    def check_name(cls, v):
+        if not v or len(v.strip()) > 50:
+            raise ValueError("Folder name 1-50 chars")
+        return v.strip()
+
+class MoveFileModel(BaseModel):
+    folder_id: Optional[str] = None
+
+class FileCommentModel(BaseModel):
+    content: str
+    
+    @field_validator('content')
+    @classmethod
+    def check_c(cls, v):
+        if not v or len(v.strip()) > 1000:
+            raise ValueError("Comment 1-1000 chars")
+        return v.strip()
+
+class BulkDeleteModel(BaseModel):
+    file_ids: List[str]
+
 # ---- AUTH HELPERS ----
 def create_token(user_id: str, username: str):
     payload = {
@@ -303,6 +347,8 @@ async def register(data: RegisterModel, request: Request):
         "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "last_login": datetime.now(timezone.utc).isoformat(),
+        "storage_quota": 1073741824,
+        "notification_settings": {"push_enabled": True, "chat_notifications": True, "file_notifications": True},
     }
     await db.users.insert_one(user)
     token = create_token(user_id, data.username)
@@ -679,13 +725,28 @@ async def websocket_chat(websocket: WebSocket, chat_id: str):
                     "sender_username": payload["username"],
                     "content": content,
                     "created_at": datetime.now(timezone.utc).isoformat(),
+                    "read": False,
                 }
                 await db.messages.insert_one({**message})
                 await db.chats.update_one(
                     {"chat_id": chat_id},
                     {"$set": {"last_message": content, "updated_at": datetime.now(timezone.utc).isoformat()}}
                 )
-                await manager.broadcast(chat_id, message)
+                msg_out = {k: v for k, v in message.items() if k != "_id"}
+                msg_out["type"] = "message"
+                await manager.broadcast(chat_id, msg_out)
+            elif data.get("type") == "typing":
+                await manager.broadcast(chat_id, {
+                    "type": "typing",
+                    "sender_id": user_id,
+                    "sender_username": payload["username"],
+                })
+            elif data.get("type") == "read":
+                await db.messages.update_many(
+                    {"chat_id": chat_id, "sender_id": {"$ne": user_id}, "read": {"$ne": True}},
+                    {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                await manager.broadcast(chat_id, {"type": "read", "reader_id": user_id})
     except WebSocketDisconnect:
         manager.disconnect(websocket, chat_id)
     except Exception:
@@ -694,6 +755,234 @@ async def websocket_chat(websocket: WebSocket, chat_id: str):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+# ---- GOOGLE OAUTH ----
+EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+@app.post("/api/auth/google")
+async def google_oauth_session(request: Request, response: Response):
+    body = await request.json()
+    session_id = body.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing session_id")
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": session_id})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Google session")
+        gdata = resp.json()
+    
+    db = get_db()
+    email = gdata["email"].lower()
+    user = await db.users.find_one({"email": email})
+    
+    if user:
+        token = create_token(user["user_id"], user["username"])
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {
+            "last_login": datetime.now(timezone.utc).isoformat(),
+            "avatar_url": user.get("avatar_url") or gdata.get("picture", ""),
+        }})
+    else:
+        user_id = str(uuid.uuid4())
+        username = email.split("@")[0].replace(".", "_")[:24]
+        existing = await db.users.find_one({"username": username})
+        if existing:
+            username = f"{username}_{uuid.uuid4().hex[:4]}"
+        user_doc = {
+            "user_id": user_id,
+            "username": username,
+            "email": email,
+            "password_hash": "",
+            "display_name": gdata.get("name", username),
+            "bio": "",
+            "avatar_url": gdata.get("picture", f"https://api.dicebear.com/7.x/bottts/svg?seed={username}"),
+            "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": datetime.now(timezone.utc).isoformat(),
+            "oauth_provider": "google",
+            "storage_used": 0,
+            "storage_quota": 1073741824,
+            "notification_settings": {"push_enabled": True, "chat_notifications": True, "file_notifications": True},
+        }
+        await db.users.insert_one(user_doc)
+        token = create_token(user_id, username)
+        user = user_doc
+    
+    user_resp = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0, "vault_hash": 0})
+    return {"token": token, "user": user_resp}
+
+# ---- FORGOT PASSWORD ----
+@app.post("/api/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordModel):
+    db = get_db()
+    email = data.email.strip().lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return {"status": "ok", "message": "If email exists, a reset code has been sent"}
+    
+    if user.get("oauth_provider"):
+        return {"status": "oauth", "message": "This account uses Google login. Please sign in with Google."}
+    
+    token = secrets.token_urlsafe(32)
+    code = f"{secrets.randbelow(1000000):06d}"
+    await db.password_resets.insert_one({
+        "token": token,
+        "code": code,
+        "email": email,
+        "user_id": user["user_id"],
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
+        "used": False,
+    })
+    return {"status": "ok", "reset_token": token, "code": code, "message": "Reset code generated. In production this would be sent via email."}
+
+@app.post("/api/auth/reset-password")
+async def reset_password(data: ResetPasswordModel):
+    db = get_db()
+    reset = await db.password_resets.find_one({"token": data.token, "used": False})
+    if not reset:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    if datetime.fromisoformat(reset["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Reset token expired")
+    
+    new_hash = pwd_context.hash(data.new_password)
+    await db.users.update_one({"user_id": reset["user_id"]}, {"$set": {"password_hash": new_hash}})
+    await db.password_resets.update_one({"token": data.token}, {"$set": {"used": True}})
+    return {"status": "password_reset"}
+
+# ---- FOLDERS ----
+@app.post("/api/folders")
+async def create_folder(data: CreateFolderModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    folder_id = str(uuid.uuid4())
+    folder = {
+        "folder_id": folder_id,
+        "user_id": current_user["user_id"],
+        "name": data.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.folders.insert_one(folder)
+    folder.pop("_id", None)
+    return folder
+
+@app.get("/api/folders")
+async def get_folders(current_user=Depends(get_current_user)):
+    db = get_db()
+    cursor = db.folders.find({"user_id": current_user["user_id"]}, {"_id": 0}).sort("name", 1)
+    return await cursor.to_list(length=100)
+
+@app.delete("/api/folders/{folder_id}")
+async def delete_folder(folder_id: str, current_user=Depends(get_current_user)):
+    db = get_db()
+    await db.folders.delete_one({"folder_id": folder_id, "user_id": current_user["user_id"]})
+    await db.files.update_many({"folder_id": folder_id, "user_id": current_user["user_id"]}, {"$unset": {"folder_id": ""}})
+    return {"status": "deleted"}
+
+@app.put("/api/files/{file_id}/move")
+async def move_file(file_id: str, data: MoveFileModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    if data.folder_id:
+        await db.files.update_one(
+            {"file_id": file_id, "user_id": current_user["user_id"]},
+            {"$set": {"folder_id": data.folder_id}}
+        )
+    else:
+        await db.files.update_one(
+            {"file_id": file_id, "user_id": current_user["user_id"]},
+            {"$unset": {"folder_id": ""}}
+        )
+    return {"status": "moved"}
+
+# ---- STORAGE QUOTA ----
+@app.get("/api/storage")
+async def get_storage(current_user=Depends(get_current_user)):
+    db = get_db()
+    pipeline = [
+        {"$match": {"user_id": current_user["user_id"]}},
+        {"$group": {"_id": None, "total": {"$sum": "$file_size"}, "count": {"$sum": 1}}}
+    ]
+    result = await db.files.aggregate(pipeline).to_list(1)
+    used = result[0]["total"] if result else 0
+    count = result[0]["count"] if result else 0
+    quota = 1073741824  # 1GB default
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if user and user.get("storage_quota"):
+        quota = user["storage_quota"]
+    return {"used": used, "quota": quota, "count": count, "percent": round(used / quota * 100, 1) if quota else 0}
+
+# ---- FILE COMMENTS ----
+@app.post("/api/files/{file_id}/comments")
+async def add_comment(file_id: str, data: FileCommentModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    file_doc = await db.files.find_one({"file_id": file_id})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    comment_id = str(uuid.uuid4())
+    comment = {
+        "comment_id": comment_id,
+        "file_id": file_id,
+        "user_id": current_user["user_id"],
+        "username": current_user["username"],
+        "content": data.content,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.comments.insert_one(comment)
+    comment.pop("_id", None)
+    return comment
+
+@app.get("/api/files/{file_id}/comments")
+async def get_comments(file_id: str):
+    db = get_db()
+    cursor = db.comments.find({"file_id": file_id}, {"_id": 0}).sort("created_at", 1)
+    return await cursor.to_list(length=100)
+
+@app.delete("/api/comments/{comment_id}")
+async def delete_comment(comment_id: str, current_user=Depends(get_current_user)):
+    db = get_db()
+    await db.comments.delete_one({"comment_id": comment_id, "user_id": current_user["user_id"]})
+    return {"status": "deleted"}
+
+# ---- BULK OPERATIONS ----
+@app.post("/api/files/bulk-delete")
+async def bulk_delete(data: BulkDeleteModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    deleted = 0
+    for fid in data.file_ids[:50]:
+        file_doc = await db.files.find_one({"file_id": fid, "user_id": current_user["user_id"]})
+        if file_doc:
+            filepath = os.path.join(UPLOAD_DIR, file_doc["stored_name"])
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            await db.files.delete_one({"file_id": fid})
+            deleted += 1
+    return {"deleted": deleted}
+
+# ---- NOTIFICATION SETTINGS ----
+@app.get("/api/notifications/settings")
+async def get_notification_settings(current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    return user.get("notification_settings", {"push_enabled": True, "chat_notifications": True, "file_notifications": True})
+
+@app.put("/api/notifications/settings")
+async def update_notification_settings(request: Request, current_user=Depends(get_current_user)):
+    db = get_db()
+    body = await request.json()
+    allowed = {"push_enabled", "chat_notifications", "file_notifications"}
+    update = {f"notification_settings.{k}": v for k, v in body.items() if k in allowed}
+    if update:
+        await db.users.update_one({"user_id": current_user["user_id"]}, {"$set": update})
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    return user.get("notification_settings", {})
+
+# ---- READ RECEIPTS ----
+@app.post("/api/chats/{chat_id}/read")
+async def mark_as_read(chat_id: str, current_user=Depends(get_current_user)):
+    db = get_db()
+    await db.messages.update_many(
+        {"chat_id": chat_id, "sender_id": {"$ne": current_user["user_id"]}, "read": {"$ne": True}},
+        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "read"}
 
 # ---- SHARE LINKS ----
 @app.post("/api/share")

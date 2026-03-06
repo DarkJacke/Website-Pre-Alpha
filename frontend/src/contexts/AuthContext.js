@@ -33,6 +33,11 @@ export function AuthProvider({ children }) {
     return res;
   }, []);
 
+  const loginWithToken = useCallback((token, userData) => {
+    localStorage.setItem('token', token);
+    setUser(userData);
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     setUser(null);
@@ -43,7 +48,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, loginWithToken }}>
       {children}
     </AuthContext.Provider>
   );
