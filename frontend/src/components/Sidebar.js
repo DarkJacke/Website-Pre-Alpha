@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Upload, MessageCircle, Search, Settings,
-  LogOut, User, ChevronDown, Zap, X, Menu
+  LogOut, User, ChevronDown, Zap, X, Menu, ShieldCheck
 } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage, onSearch, onMobileToggle }) {
@@ -37,6 +37,7 @@ export default function Sidebar({ activePage, setActivePage, onSearch, onMobileT
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'upload', icon: Upload, label: 'Upload' },
+    { id: 'vault', icon: ShieldCheck, label: 'Vault' },
     { id: 'chat', icon: MessageCircle, label: 'Messages' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];

@@ -146,6 +146,8 @@ async def lifespan(app: FastAPI):
     await db.messages.create_index("chat_id")
     await db.chats.create_index("participants")
     await db.chats.create_index("chat_id", unique=True)
+    await db.share_links.create_index("link_id", unique=True)
+    await db.share_links.create_index("expires_at")
     yield
     app.state.mongo_client.close()
 
@@ -219,6 +221,16 @@ class ThemeSettingsModel(BaseModel):
     accent_color: Optional[str] = None
     wallpaper_url: Optional[str] = None
     theme_name: Optional[str] = None
+
+class CreateShareLinkModel(BaseModel):
+    file_id: str
+    expires_hours: Optional[int] = 24
+
+class VaultPasswordModel(BaseModel):
+    vault_password: str
+
+class VaultUnlockModel(BaseModel):
+    vault_password: str
 
 class CreateChatModel(BaseModel):
     participant_id: str
@@ -460,7 +472,10 @@ async def upload_file(
 @app.get("/api/files")
 async def get_my_files(current_user=Depends(get_current_user)):
     db = get_db()
-    cursor = db.files.find({"user_id": current_user["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    cursor = db.files.find(
+        {"user_id": current_user["user_id"], "is_vault": {"$ne": True}, "is_avatar": {"$ne": True}},
+        {"_id": 0}
+    ).sort("created_at", -1)
     files = await cursor.to_list(length=500)
     return files
 
@@ -679,3 +694,256 @@ async def websocket_chat(websocket: WebSocket, chat_id: str):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+# ---- SHARE LINKS ----
+@app.post("/api/share")
+async def create_share_link(data: CreateShareLinkModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    file_doc = await db.files.find_one({"file_id": data.file_id, "user_id": current_user["user_id"]})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    link_id = str(uuid.uuid4())[:12]
+    hours = min(max(data.expires_hours or 24, 1), 720)  # 1h to 30 days
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+    
+    share = {
+        "link_id": link_id,
+        "file_id": data.file_id,
+        "user_id": current_user["user_id"],
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "download_count": 0,
+    }
+    await db.share_links.insert_one(share)
+    share.pop("_id", None)
+    return share
+
+@app.get("/api/share/{link_id}")
+async def get_share_info(link_id: str):
+    db = get_db()
+    share = await db.share_links.find_one({"link_id": link_id}, {"_id": 0})
+    if not share:
+        raise HTTPException(status_code=404, detail="Link not found")
+    if datetime.fromisoformat(share["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Link expired")
+    file_doc = await db.files.find_one({"file_id": share["file_id"]}, {"_id": 0})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File no longer exists")
+    return {"share": share, "file": file_doc}
+
+@app.get("/api/share/{link_id}/download")
+async def download_shared_file(link_id: str):
+    db = get_db()
+    share = await db.share_links.find_one({"link_id": link_id})
+    if not share:
+        raise HTTPException(status_code=404, detail="Link not found")
+    if datetime.fromisoformat(share["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Link expired")
+    file_doc = await db.files.find_one({"file_id": share["file_id"]}, {"_id": 0})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    filepath = os.path.join(UPLOAD_DIR, file_doc["stored_name"])
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    await db.share_links.update_one({"link_id": link_id}, {"$inc": {"download_count": 1}})
+    return FileResponse(filepath, media_type="application/octet-stream", filename=file_doc["filename"])
+
+@app.get("/api/share/{link_id}/preview")
+async def preview_shared_file(link_id: str):
+    db = get_db()
+    share = await db.share_links.find_one({"link_id": link_id})
+    if not share:
+        raise HTTPException(status_code=404, detail="Link not found")
+    if datetime.fromisoformat(share["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Link expired")
+    file_doc = await db.files.find_one({"file_id": share["file_id"]}, {"_id": 0})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    filepath = os.path.join(UPLOAD_DIR, file_doc["stored_name"])
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    return FileResponse(filepath, media_type=file_doc["content_type"], filename=file_doc["filename"])
+
+@app.get("/api/my-shares")
+async def get_my_shares(current_user=Depends(get_current_user)):
+    db = get_db()
+    cursor = db.share_links.find({"user_id": current_user["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    links = await cursor.to_list(length=50)
+    return links
+
+@app.delete("/api/share/{link_id}")
+async def delete_share_link(link_id: str, current_user=Depends(get_current_user)):
+    db = get_db()
+    result = await db.share_links.delete_one({"link_id": link_id, "user_id": current_user["user_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Link not found")
+    return {"status": "deleted"}
+
+# ---- SECURE VAULT ----
+@app.post("/api/vault/setup")
+async def setup_vault(data: VaultPasswordModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if user.get("vault_hash"):
+        raise HTTPException(status_code=400, detail="Vault already set up")
+    vault_hash = pwd_context.hash(data.vault_password)
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"vault_hash": vault_hash}}
+    )
+    return {"status": "vault_created"}
+
+@app.post("/api/vault/unlock")
+async def unlock_vault(data: VaultUnlockModel, current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if not user.get("vault_hash"):
+        raise HTTPException(status_code=400, detail="Vault not set up")
+    if not pwd_context.verify(data.vault_password, user["vault_hash"]):
+        raise HTTPException(status_code=401, detail="Wrong vault password")
+    vault_token = jwt.encode(
+        {"sub": current_user["user_id"], "vault": True, "exp": datetime.now(timezone.utc) + timedelta(minutes=30)},
+        JWT_SECRET, algorithm="HS256"
+    )
+    return {"vault_token": vault_token}
+
+@app.get("/api/vault/status")
+async def vault_status(current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    has_vault = bool(user.get("vault_hash"))
+    count = await db.files.count_documents({"user_id": current_user["user_id"], "is_vault": True})
+    return {"has_vault": has_vault, "vault_files_count": count}
+
+@app.post("/api/vault/upload")
+async def upload_vault_file(
+    file: UploadFile = File(...),
+    vault_token: str = Form(...),
+    current_user=Depends(get_current_user)
+):
+    try:
+        payload = jwt.decode(vault_token, JWT_SECRET, algorithms=["HS256"])
+        if not payload.get("vault") or payload["sub"] != current_user["user_id"]:
+            raise HTTPException(status_code=401, detail="Invalid vault token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Vault session expired")
+    
+    db = get_db()
+    file_id = str(uuid.uuid4())
+    original_name = sanitize_filename(file.filename or "unnamed")
+    ext = os.path.splitext(original_name)[1].lower()
+    stored_name = f"vault_{file_id}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, stored_name)
+    
+    file_size = 0
+    async with aiofiles.open(filepath, 'wb') as f:
+        while chunk := await file.read(1024 * 1024):
+            file_size += len(chunk)
+            if file_size > MAX_FILE_SIZE:
+                os.remove(filepath)
+                raise HTTPException(status_code=413, detail="File too large")
+            await f.write(chunk)
+    
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'}
+    video_exts = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
+    file_type = "image" if ext in image_exts else "video" if ext in video_exts else "other"
+    
+    file_doc = {
+        "file_id": file_id,
+        "user_id": current_user["user_id"],
+        "username": current_user["username"],
+        "filename": original_name,
+        "stored_name": stored_name,
+        "file_type": file_type,
+        "content_type": file.content_type or "application/octet-stream",
+        "file_size": file_size,
+        "is_public": False,
+        "is_vault": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.files.insert_one(file_doc)
+    file_doc.pop("_id", None)
+    return file_doc
+
+@app.get("/api/vault/files")
+async def get_vault_files(vault_token: str = Query(...), current_user=Depends(get_current_user)):
+    try:
+        payload = jwt.decode(vault_token, JWT_SECRET, algorithms=["HS256"])
+        if not payload.get("vault") or payload["sub"] != current_user["user_id"]:
+            raise HTTPException(status_code=401, detail="Invalid vault token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Vault session expired")
+    
+    db = get_db()
+    cursor = db.files.find(
+        {"user_id": current_user["user_id"], "is_vault": True},
+        {"_id": 0}
+    ).sort("created_at", -1)
+    return await cursor.to_list(length=500)
+
+@app.delete("/api/vault/files/{file_id}")
+async def delete_vault_file(file_id: str, vault_token: str = Query(...), current_user=Depends(get_current_user)):
+    try:
+        payload = jwt.decode(vault_token, JWT_SECRET, algorithms=["HS256"])
+        if not payload.get("vault") or payload["sub"] != current_user["user_id"]:
+            raise HTTPException(status_code=401, detail="Invalid vault token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Vault session expired")
+    
+    db = get_db()
+    file_doc = await db.files.find_one({"file_id": file_id, "user_id": current_user["user_id"], "is_vault": True})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    filepath = os.path.join(UPLOAD_DIR, file_doc["stored_name"])
+    if os.path.exists(filepath):
+        os.remove(filepath)
+    await db.files.delete_one({"file_id": file_id})
+    return {"status": "deleted"}
+
+# ---- AVATAR UPLOAD ----
+@app.post("/api/users/avatar")
+async def upload_avatar(file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    db = get_db()
+    ext = os.path.splitext(file.filename or ".png")[1].lower()
+    if ext not in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+        raise HTTPException(status_code=400, detail="Only image files allowed for avatar")
+    
+    avatar_name = f"avatar_{current_user['user_id']}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, avatar_name)
+    
+    file_size = 0
+    async with aiofiles.open(filepath, 'wb') as f:
+        while chunk := await file.read(1024 * 1024):
+            file_size += len(chunk)
+            if file_size > 5 * 1024 * 1024:
+                os.remove(filepath)
+                raise HTTPException(status_code=413, detail="Avatar too large (max 5MB)")
+            await f.write(chunk)
+    
+    avatar_path = f"/api/files/preview/avatar_{current_user['user_id']}"
+    # Store as a special file for serving
+    await db.files.update_one(
+        {"file_id": f"avatar_{current_user['user_id']}"},
+        {"$set": {
+            "file_id": f"avatar_{current_user['user_id']}",
+            "user_id": current_user["user_id"],
+            "filename": avatar_name,
+            "stored_name": avatar_name,
+            "file_type": "image",
+            "content_type": file.content_type or "image/png",
+            "file_size": file_size,
+            "is_public": True,
+            "is_avatar": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True
+    )
+    
+    full_avatar_url = f"{os.environ.get('APP_URL', '')}/api/files/preview/avatar_{current_user['user_id']}"
+    await db.users.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"avatar_url": full_avatar_url}}
+    )
+    user = await db.users.find_one({"user_id": current_user["user_id"]}, {"_id": 0, "password_hash": 0})
+    return user

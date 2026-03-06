@@ -10,6 +10,8 @@ import SettingsPage from './components/SettingsPage';
 import ProfilePage from './components/ProfilePage';
 import SearchResults from './components/SearchResults';
 import FilePreview from './components/FilePreview';
+import VaultPage from './components/VaultPage';
+import ShareModal from './components/ShareModal';
 import { api } from './api';
 
 function PageTransition({ pageKey, children }) {
@@ -43,6 +45,7 @@ function AppContent() {
   const { wallpaperUrl } = useTheme();
   const [activePage, setActivePage] = useState('dashboard');
   const [previewFile, setPreviewFile] = useState(null);
+  const [shareFile, setShareFile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all');
   const [viewProfileId, setViewProfileId] = useState(null);
@@ -89,13 +92,15 @@ function AppContent() {
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard onPreview={setPreviewFile} />;
+        return <Dashboard onPreview={setPreviewFile} onShare={setShareFile} />;
       case 'upload':
         return <UploadPage onDone={() => changePage('dashboard')} />;
       case 'chat':
         return <ChatPage initialChatId={chatId} />;
       case 'settings':
         return <SettingsPage />;
+      case 'vault':
+        return <VaultPage onPreview={setPreviewFile} />;
       case 'profile':
         return <ProfilePage onPreview={setPreviewFile} onStartChat={handleStartChat} onViewProfile={handleViewProfile} />;
       case 'viewProfile':
@@ -103,7 +108,7 @@ function AppContent() {
       case 'search':
         return <SearchResults query={searchQuery} searchType={searchType} onPreview={setPreviewFile} onViewProfile={handleViewProfile} onStartChat={handleStartChat} />;
       default:
-        return <Dashboard onPreview={setPreviewFile} />;
+        return <Dashboard onPreview={setPreviewFile} onShare={setShareFile} />;
     }
   };
 
@@ -113,48 +118,30 @@ function AppContent() {
         <div className="wallpaper-bg" style={{ backgroundImage: `url(${wallpaperUrl})` }} />
       )}
       <div className="relative z-10 flex w-full h-full">
-        {/* Mobile overlay */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-black/70 z-40 md:hidden animate-fade-in"
             onClick={() => setMobileMenuOpen(false)} />
         )}
-
-        {/* Sidebar - desktop always visible, mobile overlay */}
-        <div className={`
-          fixed md:relative z-50 md:z-auto
-          transition-transform duration-300 ease-out
-          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        `}>
-          <Sidebar
-            activePage={activePage}
-            setActivePage={changePage}
-            onSearch={handleSearch}
-            onMobileToggle={() => setMobileMenuOpen(false)}
-          />
+        <div className={`fixed md:relative z-50 md:z-auto transition-transform duration-300 ease-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+          <Sidebar activePage={activePage} setActivePage={changePage} onSearch={handleSearch} onMobileToggle={() => setMobileMenuOpen(false)} />
         </div>
-
-        {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile top bar */}
-          <div className="md:hidden flex items-center justify-between p-3 border-b border-white/10 bg-[#050505]"
-            data-testid="mobile-topbar">
+          <div className="md:hidden flex items-center justify-between p-3 border-b border-white/10 bg-[#050505]" data-testid="mobile-topbar">
             <button onClick={() => setMobileMenuOpen(true)} className="text-white/60 p-1" data-testid="mobile-menu-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
-            <span className="font-heading text-sm font-bold tracking-tight uppercase" style={{ color: 'var(--accent-color)' }}>
-              CyberVoid
-            </span>
+            <span className="font-heading text-sm font-bold tracking-tight uppercase" style={{ color: 'var(--accent-color)' }}>CyberVoid</span>
             <div className="w-6" />
           </div>
-
           <PageTransition pageKey={activePage}>
             {renderPage()}
           </PageTransition>
         </div>
       </div>
       {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
+      {shareFile && <ShareModal file={shareFile} onClose={() => setShareFile(null)} />}
     </div>
   );
 }

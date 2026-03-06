@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  Image, Film, FileText, File, Download, Trash2, Eye, Grid, List, Clock, HardDrive
+  Image, Film, FileText, File, Download, Trash2, Eye, Grid, List, Clock, HardDrive, Link2
 } from 'lucide-react';
 
 const typeIcons = { image: Image, video: Film, document: FileText, other: File };
@@ -17,7 +17,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function Dashboard({ onPreview }) {
+export default function Dashboard({ onPreview, onShare }) {
   const { user } = useAuth();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +136,10 @@ export default function Dashboard({ onPreview }) {
                         <Eye size={16} />
                       </button>
                     )}
+                    <button data-testid={`share-${file.file_id}`} onClick={() => onShare && onShare(file)}
+                      className="p-2 bg-white/10 hover:bg-white/20 transition-colors">
+                      <Link2 size={16} />
+                    </button>
                     <a href={api.getDownloadUrl(file.file_id)} data-testid={`download-${file.file_id}`}
                       className="p-2 bg-white/10 hover:bg-white/20 transition-colors">
                       <Download size={16} />
@@ -173,6 +177,9 @@ export default function Dashboard({ onPreview }) {
                       <Eye size={14} />
                     </button>
                   )}
+                  <button onClick={() => onShare && onShare(file)} className="p-1.5 hover:bg-white/10 transition-colors" title="Share">
+                    <Link2 size={14} />
+                  </button>
                   <a href={api.getDownloadUrl(file.file_id)} className="p-1.5 hover:bg-white/10 transition-colors">
                     <Download size={14} />
                   </a>

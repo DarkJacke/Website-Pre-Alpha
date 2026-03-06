@@ -130,6 +130,21 @@ class CyberVoidAPITester:
             return True
         return False
 
+    def test_login_demo_user(self):
+        """Test login with demo user credentials"""
+        login_data = {
+            "email": "demo@cybervoid.net",
+            "password": "DemoPass123!"
+        }
+        
+        success, response = self.run_test("Demo User Login", "POST", "/api/auth/login", 200, login_data)
+        
+        if success and 'token' in response:
+            self.token = response['token']
+            self.test_user_id = response.get('user', {}).get('user_id')
+            return True
+        return False
+
     def test_auth_me(self):
         """Test getting current user info"""
         if not self.token:
@@ -268,6 +283,96 @@ class CyberVoidAPITester:
         
         return chats_success
 
+    def test_share_links(self):
+        """Test share links functionality"""
+        if not self.token:
+            self.log_test("Share Links", False, "No token available")
+            return False
+        
+        # First upload a file to share
+        success, file_id = self.test_file_upload()
+        if not success or not file_id:
+            self.log_test("Share Links - File Upload", False, "Could not upload file for sharing")
+            return False
+        
+        # Create share link
+        share_data = {
+            "file_id": file_id,
+            "expires_hours": 24
+        }
+        success, response = self.run_test("Create Share Link", "POST", "/api/share", 200, share_data)
+        
+        if success and 'link_id' in response:
+            link_id = response['link_id']
+            
+            # Test get share info
+            share_info_success = self.run_test("Get Share Info", "GET", f"/api/share/{link_id}", 200)[0]
+            
+            # Test share download
+            share_download_success = self.run_test("Share Download", "GET", f"/api/share/{link_id}/download", 200)[0]
+            
+            # Test get my shares
+            my_shares_success = self.run_test("Get My Shares", "GET", "/api/my-shares", 200)[0]
+            
+            # Clean up - delete share
+            delete_share_success = self.run_test("Delete Share", "DELETE", f"/api/share/{link_id}", 200)[0]
+            
+            return share_info_success and share_download_success and my_shares_success and delete_share_success
+        
+        return False
+
+    def test_vault_operations(self):
+        """Test vault functionality"""
+        if not self.token:
+            self.log_test("Vault Operations", False, "No token available")
+            return False
+        
+        # Test vault status
+        status_success = self.run_test("Vault Status", "GET", "/api/vault/status", 200)[0]
+        
+        # For demo user, vault should already be setup, so we test unlock
+        unlock_data = {"vault_password": "MyVault123"}
+        unlock_success, unlock_response = self.run_test("Vault Unlock", "POST", "/api/vault/unlock", 200, unlock_data)
+        
+        if unlock_success and 'vault_token' in unlock_response:
+            vault_token = unlock_response['vault_token']
+            
+            # Test get vault files
+            vault_files_success = self.run_test("Get Vault Files", "GET", f"/api/vault/files?vault_token={vault_token}", 200)[0]
+            
+            # Test vault file upload
+            test_content = b"This is a vault test file."
+            files = {'file': ('vault_test.txt', test_content, 'text/plain')}
+            data = {'vault_token': vault_token}
+            
+            vault_upload_success, upload_response = self.run_test("Vault Upload", "POST", "/api/vault/upload", 200, data, files)
+            
+            # If upload successful, test delete
+            if vault_upload_success and 'file_id' in upload_response:
+                vault_file_id = upload_response['file_id']
+                vault_delete_success = self.run_test("Vault Delete File", "DELETE", f"/api/vault/files/{vault_file_id}?vault_token={vault_token}", 200)[0]
+                
+                return status_success and unlock_success and vault_files_success and vault_upload_success and vault_delete_success
+            
+            return status_success and unlock_success and vault_files_success and vault_upload_success
+        
+        return status_success
+
+    def test_avatar_upload(self):
+        """Test avatar upload functionality"""
+        if not self.token:
+            self.log_test("Avatar Upload", False, "No token available")
+            return False
+        
+        # Create a small test image (simple PNG-like content)
+        test_image_content = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\tpHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\nIDATx\x9cc\xf8\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00IEND\xaeB`\x82'
+        
+        files = {'file': ('test_avatar.png', test_image_content, 'image/png')}
+        
+        success, response = self.run_test("Avatar Upload", "POST", "/api/users/avatar", 200, None, files)
+        
+        return success
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("🚀 Starting CyberVoid Backend API Tests")
@@ -283,12 +388,14 @@ class CyberVoidAPITester:
         print("\n📋 Authentication Tests:")
         self.test_register_validation()
         
-        # Try login with existing test user first, then register if needed
-        if not self.test_login():
-            print("⚠️  Login failed, trying registration...")
-            if not self.test_register():
-                print("❌ Both login and registration failed")
-                return False
+        # Try login with demo user first, then fallback to test user, then register if needed
+        if not self.test_login_demo_user():
+            print("⚠️  Demo user login failed, trying test user...")
+            if not self.test_login():
+                print("⚠️  Test user login failed, trying registration...")
+                if not self.test_register():
+                    print("❌ All login methods failed")
+                    return False
         
         self.test_auth_me()
         self.test_rate_limiting()
@@ -310,6 +417,16 @@ class CyberVoidAPITester:
         # Chat operations
         print("\n📋 Chat Operations Tests:")
         self.test_chat_operations()
+        
+        # New Features Tests
+        print("\n📋 Share Links Tests:")
+        self.test_share_links()
+        
+        print("\n📋 Vault Operations Tests:")
+        self.test_vault_operations()
+        
+        print("\n📋 Avatar Upload Tests:")
+        self.test_avatar_upload()
         
         # Final results
         print("\n" + "=" * 60)

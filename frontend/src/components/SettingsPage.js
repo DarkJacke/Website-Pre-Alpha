@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../api';
-import { Check, Palette, ImageIcon, User, Save, Lock, Eye, EyeOff, Copy, Shield } from 'lucide-react';
+import { Check, Palette, ImageIcon, User, Save, Lock, Eye, EyeOff, Copy, Shield, Camera } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Change password
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm: '' });
@@ -59,6 +60,19 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const updated = await api.uploadAvatar(fd);
+      updateUser(updated);
+    } catch {}
+    setAvatarUploading(false);
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6" data-testid="settings-page">
       <div className="max-w-2xl">
@@ -74,6 +88,28 @@ export default function SettingsPage() {
             <h2 className="font-heading text-base font-bold tracking-tight uppercase">Profile</h2>
           </div>
           <div className="space-y-4 bg-[#0A0A0A] border border-white/5 p-4 md:p-6">
+            {/* Avatar */}
+            <div className="flex items-center gap-4 mb-2">
+              <div className="relative group">
+                <img src={user?.avatar_url} alt="" className="w-16 h-16 rounded-sm bg-white/10" data-testid="settings-avatar" />
+                <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity"
+                  data-testid="avatar-upload-label">
+                  {avatarUploading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Camera size={18} className="text-white/80" />
+                  )}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload}
+                    data-testid="avatar-upload-input" />
+                </label>
+              </div>
+              <div>
+                <p className="font-ui text-sm font-bold">{user?.display_name}</p>
+                <p className="text-[10px] font-body" style={{ color: 'var(--accent-color)' }}>@{user?.username}</p>
+                <p className="text-[10px] text-white/30 font-body mt-0.5">Click image to change avatar (max 5MB)</p>
+              </div>
+            </div>
+
             <div>
               <label className="font-ui text-[10px] tracking-[0.2em] uppercase text-white/40 mb-1 block">Display Name</label>
               <input
