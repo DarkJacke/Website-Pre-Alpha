@@ -135,6 +135,9 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "Darkjack@cybervoid.net")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Darkjack_1719")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.mongo_client = AsyncIOMotorClient(MONGO_URL)
@@ -156,6 +159,25 @@ async def lifespan(app: FastAPI):
     await db.password_resets.create_index("token", unique=True)
     await db.password_resets.create_index("expires_at")
     await db.oauth_sessions.create_index("session_token")
+    # Seed admin user
+    existing_admin = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
+    if not existing_admin:
+        admin_id = str(uuid.uuid4())
+        await db.users.insert_one({
+            "user_id": admin_id,
+            "username": "darkjack",
+            "email": ADMIN_EMAIL.lower(),
+            "password_hash": pwd_context.hash(ADMIN_PASSWORD),
+            "display_name": "Darkjack",
+            "bio": "System Administrator",
+            "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=darkjack",
+            "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": datetime.now(timezone.utc).isoformat(),
+            "storage_quota": 10737418240,
+            "notification_settings": {"push_enabled": True, "chat_notifications": True, "file_notifications": True},
+            "role": "admin",
+        })
     yield
     app.state.mongo_client.close()
 
@@ -397,6 +419,7 @@ async def login(data: LoginModel, request: Request):
             "bio": user.get("bio", ""),
             "avatar_url": user.get("avatar_url", ""),
             "theme_settings": user.get("theme_settings", {}),
+            "role": user.get("role", "user"),
         }
     }
 
@@ -757,6 +780,66 @@ async def websocket_chat(websocket: WebSocket, chat_id: str):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+# ---- ADMIN ----
+async def require_admin(current_user=Depends(get_current_user)):
+    db = get_db()
+    user = await db.users.find_one({"user_id": current_user["user_id"]})
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+@app.get("/api/admin/stats")
+async def admin_stats(admin=Depends(require_admin)):
+    db = get_db()
+    total_users = await db.users.count_documents({})
+    total_files = await db.files.count_documents({"is_avatar": {"$ne": True}})
+    total_vault = await db.files.count_documents({"is_vault": True})
+    total_chats = await db.chats.count_documents({})
+    total_messages = await db.messages.count_documents({})
+    total_shares = await db.share_links.count_documents({})
+    total_folders = await db.folders.count_documents({})
+    total_comments = await db.comments.count_documents({})
+    storage_pipeline = [
+        {"$match": {"is_avatar": {"$ne": True}}},
+        {"$group": {"_id": None, "total": {"$sum": "$file_size"}}}
+    ]
+    storage_result = await db.files.aggregate(storage_pipeline).to_list(1)
+    total_storage = storage_result[0]["total"] if storage_result else 0
+    recent_users = await db.users.find({}, {"_id": 0, "password_hash": 0, "vault_hash": 0}).sort("created_at", -1).to_list(5)
+    return {
+        "total_users": total_users,
+        "total_files": total_files,
+        "total_vault_files": total_vault,
+        "total_chats": total_chats,
+        "total_messages": total_messages,
+        "total_shares": total_shares,
+        "total_folders": total_folders,
+        "total_comments": total_comments,
+        "total_storage": total_storage,
+        "recent_users": recent_users,
+    }
+
+@app.get("/api/admin/users")
+async def admin_list_users(admin=Depends(require_admin)):
+    db = get_db()
+    cursor = db.users.find({}, {"_id": 0, "password_hash": 0, "vault_hash": 0}).sort("created_at", -1)
+    users = await cursor.to_list(length=200)
+    for u in users:
+        file_count = await db.files.count_documents({"user_id": u["user_id"], "is_avatar": {"$ne": True}})
+        storage_agg = await db.files.aggregate([
+            {"$match": {"user_id": u["user_id"]}},
+            {"$group": {"_id": None, "total": {"$sum": "$file_size"}}}
+        ]).to_list(1)
+        u["file_count"] = file_count
+        u["storage_used"] = storage_agg[0]["total"] if storage_agg else 0
+    return users
+
+@app.get("/api/admin/files")
+async def admin_list_files(admin=Depends(require_admin)):
+    db = get_db()
+    cursor = db.files.find({"is_avatar": {"$ne": True}}, {"_id": 0}).sort("created_at", -1)
+    return await cursor.to_list(length=200)
 
 # ---- GOOGLE OAUTH ----
 EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
