@@ -131,9 +131,15 @@ async def delete_file(item_id: str):
 
 @app.get("/{path:path}")
 async def spa(path: str):
-    target = OFFLINE_ROOT / path
-    if path and target.exists() and target.is_file():
-        return FileResponse(str(target))
+    if path:
+        try:
+            # Resolve the path and verify it remains within the OFFLINE_ROOT
+            target = (OFFLINE_ROOT / path).resolve()
+            if target.is_file() and target.is_relative_to(OFFLINE_ROOT.resolve()):
+                return FileResponse(str(target))
+        except (Exception, ValueError):
+            # Fallback to index.html for any invalid or out-of-bounds paths
+            pass
     return HTMLResponse((OFFLINE_ROOT / "index.html").read_text(encoding="utf-8"))
 
 
