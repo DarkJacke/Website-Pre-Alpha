@@ -71,7 +71,12 @@ async def list_files():
 
 @app.post("/api/offline/upload")
 async def upload_file(file: UploadFile = File(...)):
+    # Enforce a reasonable limit for offline mode (e.g., 100MB)
+    MAX_SIZE = 100 * 1024 * 1024
     raw = await file.read()
+    if len(raw) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 100MB)")
+
     encrypted = fernet.encrypt(raw)
     item_id = str(uuid.uuid4())
     enc_path = SECURE_DIR / f"{item_id}.bin"
