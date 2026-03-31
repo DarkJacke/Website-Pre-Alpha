@@ -29,6 +29,8 @@ UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/app/backend/uploads")
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
+CORS_ORIGINS = [origin.strip() for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if origin.strip()]
+EXPOSE_RESET_DEBUG = os.environ.get("EXPOSE_RESET_DEBUG", "true").lower() == "true"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -135,11 +137,15 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "Darkjack@cybervoid.net")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Darkjack_1719")
+ADMIN_EMAIL = validate_email(os.environ.get("ADMIN_EMAIL", "admin@cybervoid.local"))
+ADMIN_USERNAME = validate_username(os.environ.get("ADMIN_USERNAME", "admin"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not MONGO_URL or not DB_NAME or not JWT_SECRET:
+        raise RuntimeError("MONGO_URL, DB_NAME y JWT_SECRET son obligatorios")
+
     app.state.mongo_client = AsyncIOMotorClient(MONGO_URL)
     app.state.db = app.state.mongo_client[DB_NAME]
     db = app.state.db
@@ -162,15 +168,21 @@ async def lifespan(app: FastAPI):
     # Seed admin user
     existing_admin = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
     if not existing_admin:
+        generated_password = False
+        admin_password = ADMIN_PASSWORD
+        if not admin_password:
+            admin_password = secrets.token_urlsafe(18)
+            generated_password = True
+
         admin_id = str(uuid.uuid4())
         await db.users.insert_one({
             "user_id": admin_id,
-            "username": "darkjack",
+            "username": ADMIN_USERNAME,
             "email": ADMIN_EMAIL.lower(),
-            "password_hash": pwd_context.hash(ADMIN_PASSWORD),
-            "display_name": "Darkjack",
+            "password_hash": pwd_context.hash(admin_password),
+            "display_name": "Administrator",
             "bio": "System Administrator",
-            "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=darkjack",
+            "avatar_url": f"https://api.dicebear.com/7.x/bottts/svg?seed={ADMIN_USERNAME}",
             "theme_settings": {"accent_color": "#FF2A6D", "wallpaper_url": "", "theme_name": "default"},
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_login": datetime.now(timezone.utc).isoformat(),
@@ -178,6 +190,8 @@ async def lifespan(app: FastAPI):
             "notification_settings": {"push_enabled": True, "chat_notifications": True, "file_notifications": True},
             "role": "admin",
         })
+        if generated_password:
+            print(f"[BOOTSTRAP] Admin created: {ADMIN_EMAIL} | temporary password: {admin_password}")
     yield
     app.state.mongo_client.close()
 
@@ -185,7 +199,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1004,7 +1018,9 @@ async def forgot_password(data: ForgotPasswordModel):
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
         "used": False,
     })
-    return {"status": "ok", "reset_token": token, "code": code, "message": "Reset code generated. In production this would be sent via email."}
+    if EXPOSE_RESET_DEBUG:
+        return {"status": "ok", "reset_token": token, "code": code, "message": "Reset code generated. Debug mode enabled."}
+    return {"status": "ok", "message": "If email exists, a reset code has been sent"}
 
 @app.post("/api/auth/reset-password")
 async def reset_password(data: ResetPasswordModel):
