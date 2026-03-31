@@ -117,6 +117,7 @@ Offline Mode is completely separated from the standard login flow.
 - No login required.
 - Shows welcome message: **"Bienvenido al modo offline"**.
 - Saves files in `offline/secure_vault/` encrypted at rest.
+- Supports local metadata indexing with JSON (default) or SQLite.
 
 ### Run offline mode
 ```bash
@@ -134,9 +135,27 @@ Optional deterministic encryption key (advanced):
 OFFLINE_SECRET="your-long-secret" ./scripts/run_offline_mode.sh
 ```
 
-> The encrypted file index is stored in `offline/secure_vault/index.json`.
+Use SQLite for local metadata indexing (instead of JSON):
+```bash
+OFFLINE_DB_BACKEND=sqlite ./scripts/run_offline_mode.sh
+```
+
+Check current offline health/backend mode:
+```bash
+curl http://127.0.0.1:8787/api/offline/health
+```
+
+> Local encrypted index can be stored in `offline/secure_vault/index.json` (JSON) or `offline/secure_vault/index.sqlite3` (SQLite).
 
 ---
+
+
+### Build local executable (.exe) for offline mode
+```bash
+./scripts/build_offline_exe.sh
+```
+
+Expected output: `dist-offline/cybervoid-offline.exe` (Windows) or `dist-offline/cybervoid-offline` (Linux/macOS).
 
 ## 🗂️ Project Organization
 ```text
