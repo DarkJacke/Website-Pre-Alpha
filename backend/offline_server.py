@@ -94,6 +94,7 @@ class SqliteMetadataStore(MetadataStore):
                 )
                 """
             )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at)")
 
     def list_items(self) -> list[dict]:
         with self._connect() as conn:
