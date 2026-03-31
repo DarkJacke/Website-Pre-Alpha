@@ -20,3 +20,20 @@ Then open: `http://127.0.0.1:8787`
 - Restrict CORS origins.
 - Disable debug reset behavior.
 - Run behind TLS reverse proxy.
+
+
+### Optional: local metadata backend
+- Default uses `index.json`.
+- Use local SQLite: `OFFLINE_DB_BACKEND=sqlite ./scripts/run_offline_mode.sh`.
+
+### Build offline executable (.exe)
+```bash
+./scripts/build_offline_exe.sh
+```
+Build output goes to `dist-offline/` for local runs without requiring a Python installation.
+
+
+### Operational checks
+- Health endpoint: `curl http://127.0.0.1:8787/api/offline/health`
+- The download flow now cleans temporary decrypted files automatically after response close.
+- If `OFFLINE_SECRET` changes, previously encrypted files may fail decryption with a clear API error.
