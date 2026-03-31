@@ -1,13 +1,19 @@
-# CyberVoid Hub - Core Dependencies
-fastapi>=0.100.0
-uvicorn>=0.24.0
-motor>=3.3.0
-python-dotenv>=1.0.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.6
-aiofiles>=23.2.0
-websockets>=13.0
-pydantic>=2.5.0
-httpx>=0.25.0
-bcrypt==4.0.1
+# CyberVoid Hub - Backend requirements
+# Core API
+fastapi>=0.110.0,<1.0.0
+uvicorn>=0.30.0,<1.0.0
+motor>=3.3.0,<4.0.0
+
+# Security and auth
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.4,<2.0.0
+bcrypt>=4.0.1,<5.0.0
+cryptography>=42.0.0,<46.0.0
+
+# Utilities
+python-dotenv>=1.0.0,<2.0.0
+python-multipart>=0.0.9,<1.0.0
+aiofiles>=23.2.0,<25.0.0
+httpx>=0.25.0,<1.0.0
+pydantic>=2.5.0,<3.0.0
+requests>=2.31.0,<3.0.0
