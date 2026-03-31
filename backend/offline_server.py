@@ -157,8 +157,10 @@ if __name__ == "__main__":
     parser.add_argument("--reset", action="store_true", help="Reset offline encrypted storage")
     args = parser.parse_args()
 
-    if args.reset and SECURE_DIR.exists():
-        shutil.rmtree(SECURE_DIR)
+    if args.reset:
+        if SECURE_DIR.exists():
+            shutil.rmtree(SECURE_DIR)
         _ensure_dirs()
+        fernet = Fernet(_load_key())
 
     uvicorn.run(app, host=args.host, port=args.port)
