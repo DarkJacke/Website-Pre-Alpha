@@ -83,7 +83,7 @@ UPLOAD_DIR=./uploads
 
 ADMIN_EMAIL=admin@cybervoid.local
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=Cambia_Esta_Clave_123!
+ADMIN_PASSWORD= # Déjalo en blanco para que se genere una contraseña segura automáticamente.
 
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 EXPOSE_RESET_DEBUG=true
