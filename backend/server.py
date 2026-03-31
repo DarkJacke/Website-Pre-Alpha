@@ -144,7 +144,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not MONGO_URL or not DB_NAME or not JWT_SECRET:
-        raise RuntimeError("MONGO_URL, DB_NAME y JWT_SECRET son obligatorios")
+        raise RuntimeError("MONGO_URL, DB_NAME, and JWT_SECRET are required")
 
     app.state.mongo_client = AsyncIOMotorClient(MONGO_URL)
     app.state.db = app.state.mongo_client[DB_NAME]

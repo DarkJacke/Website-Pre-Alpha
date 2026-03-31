@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CyberVoid Offline Mode</title>
+  <style>
+    :root { --bg:#050505; --card:#101014; --line:#2d2d38; --accent:#24e5ff; --text:#f1f5f9; }
+    body { margin:0; font-family: Inter, system-ui, sans-serif; background: radial-gradient(circle at top, #121228 0%, var(--bg) 60%); color: var(--text); }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 24px; }
+    .hero { border:1px solid var(--line); background: linear-gradient(160deg, #111520, #0b0c11); border-radius:18px; padding:24px; margin-bottom:20px; }
+    h1 { margin:0 0 8px; font-size: 28px; }
+    .welcome { color: var(--accent); font-weight: 700; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    .card { border:1px solid var(--line); border-radius:14px; background: var(--card); padding:16px; }
+    input, button { border-radius:10px; border:1px solid var(--line); background:#12131a; color:var(--text); padding:10px; }
+    button { cursor:pointer; background: var(--accent); color:#001018; border:none; font-weight:700; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border-bottom:1px solid #2a2b33; padding:10px; text-align:left; font-size: 14px; }
+    .tag { display:inline-block; padding:4px 8px; border-radius:999px; background:#1d2e34; color:#8ef5ff; font-size:12px; }
+    @media (max-width: 860px){ .grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>CyberVoid Hub · Offline</h1>
+      <p class="welcome">Bienvenido al modo offline</p>
+      <p>This isolated mode runs locally without login and stores files encrypted in a dedicated secure folder.</p>
+      <p><span class="tag">No network dependency</span> <span class="tag">Encrypted at rest</span> <span class="tag">Local-only API</span></p>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3>Upload to encrypted vault</h3>
+        <input id="fileInput" type="file" />
+        <button id="uploadBtn">Upload</button>
+        <p id="uploadStatus"></p>
+      </div>
+      <div class="card">
+        <h3>Offline status</h3>
+        <pre id="health"></pre>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px;">
+      <h3>Stored files</h3>
+      <table>
+        <thead><tr><th>Name</th><th>Size</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    async function fetchHealth() {
+      const res = await fetch('/api/offline/health');
+      document.getElementById('health').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function loadFiles() {
+      const res = await fetch('/api/offline/files');
+      const data = await res.json();
+      const tbody = document.getElementById('rows');
+      tbody.innerHTML = '';
+      data.items.forEach(file => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${file.name}</td>
+          <td>${(file.size / 1024).toFixed(1)} KB</td>
+          <td>${new Date(file.created_at).toLocaleString()}</td>
+          <td>
+            <a href="/api/offline/download/${file.id}">Download</a>
+            <button data-id="${file.id}" class="deleteBtn" style="margin-left:8px;">Delete</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('.deleteBtn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await fetch(`/api/offline/files/${btn.dataset.id}`, { method: 'DELETE' });
+          await loadFiles();
+        });
+      });
+    }
+
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+      const input = document.getElementById('fileInput');
+      const status = document.getElementById('uploadStatus');
+      if (!input.files.length) {
+        status.textContent = 'Select a file first.';
+        return;
+      }
+      const fd = new FormData();
+      fd.append('file', input.files[0]);
+      await fetch('/api/offline/upload', { method: 'POST', body: fd });
+      status.textContent = 'Uploaded and encrypted successfully.';
+      input.value = '';
+      await loadFiles();
+    });
+
+    fetchHealth();
+    loadFiles();
+  </script>
+</body>
+</html>
