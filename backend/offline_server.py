@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict
 
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
