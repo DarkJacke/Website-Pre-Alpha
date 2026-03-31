@@ -44,9 +44,11 @@ class JsonMetadataStore(MetadataStore):
         self.meta_file = meta_file
 
     def _load_meta(self) -> Dict[str, dict]:
+        if not self.meta_file.exists():
+            return {}
         try:
             return json.loads(self.meta_file.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, OSError):
             return {}
 
     def _save_meta(self, meta: Dict[str, dict]) -> None:
